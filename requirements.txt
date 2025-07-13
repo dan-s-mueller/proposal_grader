@@ -1,0 +1,7 @@
+pdfminer.six
+pymupdf
+openpyxl
+tiktoken
+openai
+python-dotenv
+pyyaml
