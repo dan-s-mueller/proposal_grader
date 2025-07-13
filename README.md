@@ -1,2 +1,2 @@
-# proposal_grader
+# Proposal Grader
 Grades NASA SBIR Proposals
