@@ -3,10 +3,17 @@ import json
 import csv
 import sys
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
 import logging
+# from langsmith import traceable
+# from langsmith import wrappers
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain_openai import ChatOpenAI
 
 # --- CONFIGURATION ---
 RUBRIC_PATH = Path("output/complete_rubric.json")
@@ -69,6 +76,13 @@ def map_score_to_label(score: float) -> str:
         return "superior"
 
 # --- MAIN PIPELINE ---
+class RubricScore(BaseModel):
+    score: int = Field(..., ge=1, le=4)
+    evidence: str
+    reasoning: str
+    improvements: Optional[str] = ""
+
+# @traceable
 def main():
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -79,7 +93,7 @@ def main():
     if not model:
         logging.error("OPENAI_MODEL not set in environment.")
         sys.exit(1)
-    client = OpenAI(api_key=api_key)
+    # client = wrappers.wrap_openai(OpenAI(api_key=api_key))
 
     # 1. Load rubric and file config
     rubric = load_json(RUBRIC_PATH)
@@ -113,17 +127,9 @@ def main():
 
     # 6. Output CSV report (write header at start)
     with open(CSV_OUTPUT, "w", newline="") as csvfile:
-        fieldnames = ["section", "category", "sub_category", "score", "weight", "weighted_score", "rationale"]
+        fieldnames = ["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-
-    # Write Markdown report header at start
-    md_output = CSV_OUTPUT.with_suffix('.md')
-    md_fieldnames = ["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"]
-    with open(md_output, "w") as mdfile:
-        mdfile.write("# Proposal Evaluation Summary\n\n")
-        mdfile.write("| Section | Category | Sub-category | Score | Weight | Weighted Score | Evidence | Reasoning | Improvements |\n")
-        mdfile.write("|---------|----------|--------------|-------|--------|---------------|----------|-----------|--------------|\n")
 
     # 4. For each rubric sub-category, use the corresponding prompt to ask the LLM for a grade (1-4) and rationale
     results = []
@@ -137,16 +143,7 @@ def main():
         "TASK (per call)\n"
         "1. Read the rubric element and the proposal text the user supplies.  "
         "2. Assign a single integer **score (1–4)** using ONLY the scoring rubric in the user prompt.  "
-        "   • Err on the side of strictness—when in doubt, choose the lower score.  "
-        "3. Return exactly this JSON:\n\n"
-        "```json\n"
-        "{\n"
-        "  \"score\": <1-4>,\n"
-        "  \"evidence\": [\"quoted snippet 1\", \"quoted snippet 2\", …],\n"
-        "  \"reasoning\": \"<≤ 75 words>\",\n"
-        "  \"improvements\": \"<≤ 75 words – ONLY include if score is 1 or 2>\"\n"
-        "}\n"
-        "```\n"
+        "   • Err on the side of strictness—when in doubt, choose the lower score."
     )
     for section_name, section in rubric["types"].items():
         section_total = 0.0
@@ -158,39 +155,42 @@ def main():
             for subcat_name, subcat in category["sub_categories"].items():
                 code = f"{category_name.upper().replace(' ', '_').replace('/', '_')}_{subcat_name.upper().replace(' ', '_').replace('/', '_')}"
                 logging.info(f"Grading: Section='{section_name}', Category='{category_name}', Sub-category='{subcat_name}'...")
-                prompt_template = load_prompt(code)
-                prompt = prompt_template.format(section_text=proposal_text)
-                # Call OpenAI (new API)
+
+                # Set up the parser and prompt
+                parser = PydanticOutputParser(pydantic_object=RubricScore)
+
+                # Load the rubric prompt template (from .md file)
+                rubric_prompt_template = load_prompt(code)
+                # Fill the {section_text} variable in the prompt with the proposal text
+                rubric_prompt_filled = rubric_prompt_template.format(section_text=proposal_text)
+
+                # This is the user prompt for the LLM: rubric + proposal text
+                user_prompt = rubric_prompt_filled
+
+                # Set up the LangChain prompt template
+                prompt_template = ChatPromptTemplate.from_messages([
+                    SystemMessagePromptTemplate.from_template(SYSTEM_PROMPT),
+                    HumanMessagePromptTemplate.from_template("{user_prompt}\n{format_instructions}")
+                ])
+
+                llm = ChatOpenAI(model=model, temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.1")), openai_api_key=api_key)
+
+                chain = prompt_template | llm | parser
+
+                # In your loop, call:
                 try:
-                    response = client.chat.completions.create(
-                        model=model,
-                        messages=[
-                            {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.1")),
-                        max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "500"))
-                    )
-                    content = response.choices[0].message.content
-                except Exception as e:
-                    logging.error(f"LLM call failed for {code}: {e}")
-                    content = ""
-                # Parse response (expecting JSON)
-                try:
-                    data = json.loads(content)
-                    score = int(data.get("score", 1))
-                    rationale = data.get("reasoning", "")
-                    evidence = data.get("evidence", [])
-                    improvements = data.get("improvements", "")
-                    if isinstance(evidence, list):
-                        evidence_str = "; ".join(evidence)
-                    else:
-                        evidence_str = str(evidence)
-                except Exception:
-                    import re
-                    m = re.search(r'([1-4])', content)
-                    score = int(m.group(1)) if m else 1
-                    rationale = content
+                    result: RubricScore = chain.invoke({
+                        "user_prompt": user_prompt,
+                        "format_instructions": parser.get_format_instructions()
+                    })
+                    score = result.score
+                    rationale = result.reasoning
+                    evidence_str = result.evidence
+                    improvements = result.improvements or ""
+                except Exception as ex:
+                    logging.warning(f"Could not parse LLM response as RubricScore for {code}: {ex}")
+                    score = 1
+                    rationale = ""
                     evidence_str = ""
                     improvements = ""
                 weight = subcat["weight"] / 100.0
@@ -202,8 +202,8 @@ def main():
                     "score": score,
                     "weight": weight,
                     "weighted_score": weighted_score,
-                    "rationale": rationale,
                     "evidence": evidence_str,
+                    "reasoning": rationale,
                     "improvements": improvements if improvements and str(improvements).strip() else ""
                 }
                 subcat_results.append(row)
@@ -211,11 +211,8 @@ def main():
                 subcat_weight_sum += weight
                 # Write this row to CSV immediately
                 with open(CSV_OUTPUT, "a", newline="") as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "rationale"])
-                    writer.writerow({k: row[k] for k in ["section", "category", "sub_category", "score", "weight", "weighted_score", "rationale"]})
-                # Write this row to Markdown immediately
-                with open(md_output, "a") as mdfile:
-                    mdfile.write(f"| {row['section']} | {row['category']} | {row['sub_category']} | {row['score']} | {row['weight']:.2f} | {row['weighted_score']:.2f} | {row['evidence']} | {row['rationale'].replace('|', ' ')} | {row['improvements'].replace('|', ' ')} |\n")
+                    writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"])
+                    writer.writerow(row)
                 logging.info(f"Completed: {code} | Score: {score} | Weighted: {weighted_score:.3f}")
         section_score = section_total / subcat_weight_sum if subcat_weight_sum else 0.0
         section_scores[section_name] = section_score
@@ -232,7 +229,7 @@ def main():
 
     # Write section totals and overall to CSV
     with open(CSV_OUTPUT, "a", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "rationale"])
+        writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"])
         writer.writerow({})
         for section_name, section_score in section_scores.items():
             writer.writerow({
@@ -249,14 +246,5 @@ def main():
         })
     logging.info(f"CSV report saved to {CSV_OUTPUT}")
 
-    # Write section totals and overall to Markdown
-    with open(md_output, "a") as mdfile:
-        mdfile.write("|  |  |  |  |  |  |  |  |  |\n")
-        for section_name, section_score in section_scores.items():
-            mdfile.write(f"| **{section_name}** |  |  | **{section_score:.2f}** | **{section_weights[section_name]:.2f}** |  |  |  |  |\n")
-        mdfile.write("|  |  |  |  |  |  |  |  |  |\n")
-        mdfile.write(f"| **OVERALL** |  |  | **{overall_score:.2f}** | **1.00** |  |  |  | **{recommendation.upper()}** |\n")
-    logging.info(f"Markdown report saved to {md_output}")
-
 if __name__ == "__main__":
-    main() 
+    main()

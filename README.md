@@ -1,22 +1,29 @@
 # NASA SBIR Ignite Proposal Grading Pipeline
 
 ## Overview
-This system automates the grading of NASA SBIR Ignite proposals using a rubric defined in CSV files. It checks for required proposal documents, evaluates proposal content using AI, and outputs a CSV summary with scores and recommendations on a 1–4 scale (unsatisfactory, marginal, satisfactory, superior).
+This system automates the grading of NASA SBIR Ignite proposals using a rubric defined in JSON files. It checks for required proposal documents, evaluates proposal content using AI, and outputs a CSV summary with scores and recommendations on a 1–4 scale (unsatisfactory, marginal, satisfactory, superior).
 
-## Pipeline Steps
-1. **Parse Rubric CSVs**: Reads `eval_criteria_description.csv` and `eval_rubric.csv` to generate rubric JSONs and prompt templates.
-2. **Check Proposal Files**: Recursively searches the proposal directory for all required and optional files, using flexible filename patterns.
-3. **Grade Proposal**: Uses OpenAI to evaluate each rubric sub-category, assigns a 1–4 score, and aggregates results using the rubric weights.
-4. **Output Results**: Writes a CSV summary (`output/evaluation_summary.csv`) with detailed scores, weights, and recommendations.
+## How it Works
+- **Rubric and File Config Loading**: Loads the evaluation rubric and required/optional file configuration from JSON files.
+- **File Detection**: Recursively searches the proposal directory for all required and optional files, using flexible filename patterns. Only truly required files cause errors if missing.
+- **Proposal Text Extraction**: Extracts and aggregates text from all required PDF proposal files. (Other file types are currently ignored.)
+- **LLM Grading**: For each rubric sub-category, the system constructs a prompt (rubric + proposal text) and uses OpenAI to evaluate and assign a 1–4 score, with rationale.
+- **CSV Output**: Writes a CSV summary (`output/evaluation_summary.csv`) with detailed scores, weights, and recommendations. No Markdown output is produced.
+
+## LLM Integration & Structured Output
+- The pipeline uses **LangChain** and **OpenAI** to call the LLM for each rubric sub-category.
+- A **Pydantic model** (`RubricScore`) defines the expected structure of the LLM's response (score, evidence, reasoning, improvements).
+- **LangChain's `PydanticOutputParser`** is used to generate format instructions for the LLM and to validate/parse the LLM's output into a Python object.
+- The prompt sent to the LLM includes both the rubric instructions and the full proposal text, ensuring the model has all necessary context for evaluation.
+- This approach enforces robust, structured, and reliable grading, minimizing formatting errors and making downstream processing easy.
 
 ## File & Directory Structure
 ```
 project_root/
 ├── main.py
-├── proposal_grader.py
 ├── csv_rubric_parser.py
 ├── config/
-│   ├── proposal_files.json
+│   └── proposal_files.json
 ├── documents/
 │   ├── solicitations/
 │   │   ├── eval_criteria_description.csv
@@ -47,7 +54,7 @@ project_root/
    ```sh
    poetry run python main.py
    ```
-   - By default, this will parse the rubric CSVs, grade the proposal in `documents/proposal/`, and write results to `output/evaluation_summary.csv`.
+   - By default, this will parse the rubric, grade the proposal in `documents/proposal/`, and write results to `output/evaluation_summary.csv`.
 
 ## Scoring & Aggregation
 - **Each sub-category** is scored 1–4 (1=unsatisfactory, 2=marginal, 3=satisfactory, 4=superior).
@@ -72,7 +79,7 @@ project_root/
 ## Output CSV
 - Located at `output/evaluation_summary.csv`.
 - Columns:
-  - section, category, sub_category, score_1_4, weight, weighted_score_1_4, score, weighted_score
+  - section, category, sub_category, score, weight, weighted_score, rationale
   - Section totals and overall score/recommendation are included at the end.
 
 ## Notes
