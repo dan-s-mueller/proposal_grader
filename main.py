@@ -117,10 +117,37 @@ def main():
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
+    # Write Markdown report header at start
+    md_output = CSV_OUTPUT.with_suffix('.md')
+    md_fieldnames = ["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"]
+    with open(md_output, "w") as mdfile:
+        mdfile.write("# Proposal Evaluation Summary\n\n")
+        mdfile.write("| Section | Category | Sub-category | Score | Weight | Weighted Score | Evidence | Reasoning | Improvements |\n")
+        mdfile.write("|---------|----------|--------------|-------|--------|---------------|----------|-----------|--------------|\n")
+
     # 4. For each rubric sub-category, use the corresponding prompt to ask the LLM for a grade (1-4) and rationale
     results = []
     section_scores = {}
     section_weights = {}
+    SYSTEM_PROMPT = (
+        "SYSTEM PROMPT  •  NASA SBIR Ignite Phase I Scoring  (v2025-1)\n\n"
+        "!!! RESET !!!\n"
+        "Ignore all prior instructions, examples, or conversational context.  "
+        "Your sole role is an **objective, conservative evaluator** for NASA SBIR Ignite Phase I proposals.\n\n"
+        "TASK (per call)\n"
+        "1. Read the rubric element and the proposal text the user supplies.  "
+        "2. Assign a single integer **score (1–4)** using ONLY the scoring rubric in the user prompt.  "
+        "   • Err on the side of strictness—when in doubt, choose the lower score.  "
+        "3. Return exactly this JSON:\n\n"
+        "```json\n"
+        "{\n"
+        "  \"score\": <1-4>,\n"
+        "  \"evidence\": [\"quoted snippet 1\", \"quoted snippet 2\", …],\n"
+        "  \"reasoning\": \"<≤ 75 words>\",\n"
+        "  \"improvements\": \"<≤ 75 words – ONLY include if score is 1 or 2>\"\n"
+        "}\n"
+        "```\n"
+    )
     for section_name, section in rubric["types"].items():
         section_total = 0.0
         section_weight = section["weight"] / 100.0
@@ -137,7 +164,10 @@ def main():
                 try:
                     response = client.chat.completions.create(
                         model=model,
-                        messages=[{"role": "user", "content": prompt}],
+                        messages=[
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt}
+                        ],
                         temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.1")),
                         max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "500"))
                     )
@@ -150,11 +180,19 @@ def main():
                     data = json.loads(content)
                     score = int(data.get("score", 1))
                     rationale = data.get("reasoning", "")
+                    evidence = data.get("evidence", [])
+                    improvements = data.get("improvements", "")
+                    if isinstance(evidence, list):
+                        evidence_str = "; ".join(evidence)
+                    else:
+                        evidence_str = str(evidence)
                 except Exception:
                     import re
                     m = re.search(r'([1-4])', content)
                     score = int(m.group(1)) if m else 1
                     rationale = content
+                    evidence_str = ""
+                    improvements = ""
                 weight = subcat["weight"] / 100.0
                 weighted_score = score * weight
                 row = {
@@ -164,15 +202,20 @@ def main():
                     "score": score,
                     "weight": weight,
                     "weighted_score": weighted_score,
-                    "rationale": rationale
+                    "rationale": rationale,
+                    "evidence": evidence_str,
+                    "improvements": improvements if improvements and str(improvements).strip() else ""
                 }
                 subcat_results.append(row)
                 section_total += weighted_score
                 subcat_weight_sum += weight
                 # Write this row to CSV immediately
                 with open(CSV_OUTPUT, "a", newline="") as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                    writer.writerow(row)
+                    writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "rationale"])
+                    writer.writerow({k: row[k] for k in ["section", "category", "sub_category", "score", "weight", "weighted_score", "rationale"]})
+                # Write this row to Markdown immediately
+                with open(md_output, "a") as mdfile:
+                    mdfile.write(f"| {row['section']} | {row['category']} | {row['sub_category']} | {row['score']} | {row['weight']:.2f} | {row['weighted_score']:.2f} | {row['evidence']} | {row['rationale'].replace('|', ' ')} | {row['improvements'].replace('|', ' ')} |\n")
                 logging.info(f"Completed: {code} | Score: {score} | Weighted: {weighted_score:.3f}")
         section_score = section_total / subcat_weight_sum if subcat_weight_sum else 0.0
         section_scores[section_name] = section_score
@@ -187,8 +230,9 @@ def main():
     overall_score = overall / total_weight if total_weight else 0.0
     recommendation = map_score_to_label(overall_score)
 
+    # Write section totals and overall to CSV
     with open(CSV_OUTPUT, "a", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "rationale"])
         writer.writerow({})
         for section_name, section_score in section_scores.items():
             writer.writerow({
@@ -205,19 +249,13 @@ def main():
         })
     logging.info(f"CSV report saved to {CSV_OUTPUT}")
 
-    # Write Markdown report
-    md_output = CSV_OUTPUT.with_suffix('.md')
-    with open(md_output, "w") as mdfile:
-        mdfile.write("# Proposal Evaluation Summary\n\n")
-        mdfile.write("| Section | Category | Sub-category | Score | Weight | Weighted Score | Rationale |\n")
-        mdfile.write("|---------|----------|--------------|-------|--------|---------------|-----------|\n")
-        for row in results:
-            mdfile.write(f"| {row['section']} | {row['category']} | {row['sub_category']} | {row['score']} | {row['weight']:.2f} | {row['weighted_score']:.2f} | {row['rationale'].replace('|', ' ')} |\n")
-        mdfile.write("|  |  |  |  |  |  |  |\n")
+    # Write section totals and overall to Markdown
+    with open(md_output, "a") as mdfile:
+        mdfile.write("|  |  |  |  |  |  |  |  |  |\n")
         for section_name, section_score in section_scores.items():
-            mdfile.write(f"| **{section_name}** |  |  | **{section_score:.2f}** | **{section_weights[section_name]:.2f}** |  |  |\n")
-        mdfile.write("|  |  |  |  |  |  |  |\n")
-        mdfile.write(f"| **OVERALL** |  |  | **{overall_score:.2f}** | **1.00** |  | **{recommendation.upper()}** |\n")
+            mdfile.write(f"| **{section_name}** |  |  | **{section_score:.2f}** | **{section_weights[section_name]:.2f}** |  |  |  |  |\n")
+        mdfile.write("|  |  |  |  |  |  |  |  |  |\n")
+        mdfile.write(f"| **OVERALL** |  |  | **{overall_score:.2f}** | **1.00** |  |  |  | **{recommendation.upper()}** |\n")
     logging.info(f"Markdown report saved to {md_output}")
 
 if __name__ == "__main__":
