@@ -1,12 +1,18 @@
 {
-  "rubric_id": "2025_P1_Commercial",
-  "weight": 0.30,
+  "rubric_id": "Commercial_Evaluation",
+  "weight": 0.3,
   "dimensions": [
-    {"code": "MARKET_KNOWLEDGE", "weight": 0.05},
-    {"code": "CUSTOMER", "weight": 0.15},
-    {"code": "VALUE", "weight": 0.25},
-    {"code": "COMPETITION", "weight": 0.25},
-    {"code": "TRANSITION", "weight": 0.25},
-    {"code": "WRITE", "weight": 0.05}
+    {
+      "name": "typical NASA SBIR proposal at",
+      "code": "TYPICAL_NASA_SBIR_PROPOSAL_AT",
+      "weight": 0.3,
+      "description": "Evaluation of typical nasa sbir proposal at."
+    },
+    {
+      "name": "even at",
+      "code": "EVEN_AT",
+      "weight": 1.0,
+      "description": "dilution."
+    }
   ]
 }

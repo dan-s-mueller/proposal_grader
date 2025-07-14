@@ -1,12 +1,12 @@
 {
-  "rubric_id": "2025_P1_Technical",
-  "weight": 0.70,
+  "rubric_id": "Technical_Evaluation",
+  "weight": 0.7,
   "dimensions": [
-    {"code": "BENEFITS", "weight": 0.30},
-    {"code": "SOTA", "weight": 0.10},
-    {"code": "RISK", "weight": 0.20},
-    {"code": "PLAN", "weight": 0.15},
-    {"code": "TEAM", "weight": 0.20},
-    {"code": "WRITE", "weight": 0.05}
+    {
+      "name": "typical NASA SBIR proposal at",
+      "code": "TYPICAL_NASA_SBIR_PROPOSAL_AT",
+      "weight": 0.3,
+      "description": "Evaluation of typical nasa sbir proposal at."
+    }
   ]
 }
