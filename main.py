@@ -75,6 +75,11 @@ def map_score_to_label(score: float) -> str:
     else:
         return "superior"
 
+def model_supports_temperature(model_name: str) -> bool:
+    # Add more models as needed
+    models_without_temp = ["o3", "o3-mini"]
+    return not any(model_name.startswith(m) for m in models_without_temp)
+
 # --- MAIN PIPELINE ---
 class RubricScore(BaseModel):
     score: int = Field(..., ge=1, le=4)
@@ -125,9 +130,21 @@ def main():
         if file.suffix.lower() == ".pdf":
             proposal_text += extract_pdf_text(file) + "\n"
 
+    # Read technical solicitation description
+    with open("documents/solicitations/technical_description.md", "r", encoding="utf-8") as f:
+        technical_description = f.read().strip()
+    # Read FAQ guidance
+    with open("documents/solicitations/faq.md", "r", encoding="utf-8") as f:
+        faq_guidance = f.read().strip()
+    # logging.info(f"Raw technical_description content read:\n{technical_description}")
+
     # 6. Output CSV report (write header at start)
-    with open(CSV_OUTPUT, "w", newline="") as csvfile:
-        fieldnames = ["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"]
+    with open(CSV_OUTPUT, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = [
+            "section", "category", "sub_category", "score", "weight", "weighted_score",
+            "type_weight", "category_weight", "sub_category_weight",
+            "evidence", "reasoning", "improvements"
+        ]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
@@ -136,15 +153,19 @@ def main():
     section_scores = {}
     section_weights = {}
     SYSTEM_PROMPT = (
-        "SYSTEM PROMPT  •  NASA SBIR Ignite Phase I Scoring  (v2025-1)\n\n"
+        f"SYSTEM PROMPT: NASA SBIR Ignite Phase I Scoring  (v2025-1)\n\n"
         "!!! RESET !!!\n"
-        "Ignore all prior instructions, examples, or conversational context.  "
+        "Ignore all prior instructions, examples, or conversational context."
+        "The technical solicitation details are the following. This is the exact text for the subtopic this proposal is intended for. All technical criteria should be framed in terms of this subtopic unless otherwise specified in the grading criteria below.\n\n"
+        f"TECHNICAL SOLICITATION DETAILS (Subtopic):\n{technical_description}\n\n"
+        "The following is additional guidance from the NASA SBIR Ignite AI AMA FAQ. Treat this as authoritative context and guidance when grading.\n\n"
+        f"{faq_guidance}\n\n"
         "Your sole role is an **objective, conservative evaluator** for NASA SBIR Ignite Phase I proposals.\n\n"
         "TASK (per call)\n"
-        "1. Read the rubric element and the proposal text the user supplies.  "
-        "2. Assign a single integer **score (1–4)** using ONLY the scoring rubric in the user prompt.  "
-        "   • Err on the side of strictness—when in doubt, choose the lower score."
+        "1. Read the rubric element and the proposal text the user supplies."
+        "2. Assign a single integer **score (1–4)** using ONLY the scoring rubric in the user prompt.Err on the side of strictness—when in doubt, choose the lower score."
     )
+    # logging.info(f"SYSTEM_PROMPT used for LLM:\n{SYSTEM_PROMPT}")
     for section_name, section in rubric["types"].items():
         section_total = 0.0
         section_weight = section["weight"] / 100.0
@@ -173,7 +194,17 @@ def main():
                     HumanMessagePromptTemplate.from_template("{user_prompt}\n{format_instructions}")
                 ])
 
-                llm = ChatOpenAI(model=model, temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.1")), openai_api_key=api_key)
+                if model_supports_temperature(model):
+                    llm = ChatOpenAI(
+                        model=model,
+                        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.1")),
+                        openai_api_key=api_key
+                    )
+                else:
+                    llm = ChatOpenAI(
+                        model=model,
+                        openai_api_key=api_key
+                    )
 
                 chain = prompt_template | llm | parser
 
@@ -181,7 +212,8 @@ def main():
                 try:
                     result: RubricScore = chain.invoke({
                         "user_prompt": user_prompt,
-                        "format_instructions": parser.get_format_instructions()
+                        "format_instructions": parser.get_format_instructions(),
+                        "technical_description": technical_description
                     })
                     score = result.score
                     rationale = result.reasoning
@@ -202,6 +234,9 @@ def main():
                     "score": score,
                     "weight": weight,
                     "weighted_score": weighted_score,
+                    "type_weight": section["weight"],
+                    "category_weight": category["weight"],
+                    "sub_category_weight": subcat["weight"],
                     "evidence": evidence_str,
                     "reasoning": rationale,
                     "improvements": improvements if improvements and str(improvements).strip() else ""
@@ -210,8 +245,12 @@ def main():
                 section_total += weighted_score
                 subcat_weight_sum += weight
                 # Write this row to CSV immediately
-                with open(CSV_OUTPUT, "a", newline="") as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"])
+                with open(CSV_OUTPUT, "a", newline="", encoding="utf-8") as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=[
+                        "section", "category", "sub_category", "score", "weight", "weighted_score",
+                        "type_weight", "category_weight", "sub_category_weight",
+                        "evidence", "reasoning", "improvements"
+                    ])
                     writer.writerow(row)
                 logging.info(f"Completed: {code} | Score: {score} | Weighted: {weighted_score:.3f}")
         section_score = section_total / subcat_weight_sum if subcat_weight_sum else 0.0
@@ -228,8 +267,12 @@ def main():
     recommendation = map_score_to_label(overall_score)
 
     # Write section totals and overall to CSV
-    with open(CSV_OUTPUT, "a", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=["section", "category", "sub_category", "score", "weight", "weighted_score", "evidence", "reasoning", "improvements"])
+    with open(CSV_OUTPUT, "a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=[
+            "section", "category", "sub_category", "score", "weight", "weighted_score",
+            "type_weight", "category_weight", "sub_category_weight",
+            "evidence", "reasoning", "improvements"
+        ])
         writer.writerow({})
         for section_name, section_score in section_scores.items():
             writer.writerow({
