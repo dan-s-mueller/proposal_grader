@@ -1,0 +1,23 @@
+[project]
+name = "proposal-grader"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Dan Mueller",email = "dsm@danmueller.pro"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pdfminer-six (>=20250506,<20250507)",
+    "pymupdf (>=1.26.3,<2.0.0)",
+    "openpyxl (>=3.1.5,<4.0.0)",
+    "tiktoken (>=0.9.0,<0.10.0)",
+    "openai (>=1.95.1,<2.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
