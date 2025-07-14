@@ -1,0 +1,389 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "description": "NASA SBIR Ignite Evaluation Rubric",
+    "total_weight": 100
+  },
+  "types": {
+    "Commercial": {
+      "weight": 30.0,
+      "categories": {
+        "INTRODUCTION": {
+          "weight": 5.0,
+          "sub_categories": {
+            "INTRODUCTION": {
+              "description": "Write a clear, concise description of what your business does, your technology solution and advantage, where you are in your business evolution, and how SBIR Ignite fits into your firm's future. Readers should understand the purpose and value of the proposed technology.",
+              "scoring": {
+                "unsatisfactory": "Ineffective introduction. Failed to provide concise business proposition.",
+                "marginal": "Adequate introduction. Gradually conveyed company's purpose and value. Should be more crisp.",
+                "satisfactory": "Effective introduction. Systematically conveys company's purpose and value.",
+                "superior": "Exceptional introduction.Immediately conveys company's purpose and value."
+              },
+              "weight": 5.0
+            }
+          }
+        },
+        "PRODUCT / SOLUTION": {
+          "weight": 15.0,
+          "sub_categories": {
+            "TECHNOLOGY VALIDATION": {
+              "description": "Describe the evidence you have that validates your solution(s) work from a technical point of view. The \"gold standard\" here is commercial product sales with happy customers.",
+              "scoring": {
+                "unsatisfactory": "No evidence of technical validation, even for product plans / designs.",
+                "marginal": "Evidence of initial validation. Designs and / or models vetted by external experts, but have not fielded products.",
+                "satisfactory": "Evidence of stageappropriate validation. Demonstrates clear plan to complete remaining validation.",
+                "superior": "Impeccable validation. Undeniable evidence technology is commercially viable."
+              },
+              "weight": 3.75
+            },
+            "COMPETITION, SUBSTITUTES & DIFFERENTIATION": {
+              "description": "Compared with existing and emerging solutions, describe your value differentiation. Why do you believe customers will choose your solution? The best competitive analyses thoroughly account for substitute technologies -- which might solve the same problem in a very different way -- as well as direct competition.",
+              "scoring": {
+                "unsatisfactory": "No evidence of competitive analysis. Undifferentiated product.",
+                "marginal": "Incomplete or too narrow competitive analysis. Somewhat differentiated product.",
+                "satisfactory": "Thorough competitive analysis. Differentiated product.",
+                "superior": "Persuasive competitive analysis. Highly differentiated product."
+              },
+              "weight": 3.75
+            },
+            "TECHNICAL RISKS AND MITIGATION PLANS": {
+              "description": "A key historical difference between success and failure in NASA's SBIR program is offerors' understanding of the unknowns and challenges they are likely to face in maturing their technologies. Prove to the reader that your team is sophisticated and clear-eyed in analyzing the remaining risks your technology faces. Demonstrate that you have plans to mitigate those risks. In this section, your risk narrative (to include mitigation plans) should be focused on technical matters. Please point out which risk mitigation plans would take place during a Phase I effort, during a Phase II effort and which would be post-Phase II.",
+              "scoring": {
+                "unsatisfactory": "Failed to present any technical risks.",
+                "marginal": "Inadequate risk analysis or mitigation plans.",
+                "satisfactory": "Sufficient risk analysis and mitigation plans.",
+                "superior": "Convincing risk analysis and mitigation plans."
+              },
+              "weight": 3.75
+            },
+            "INTELLECTUAL PROPERTY": {
+              "description": "Describe the critical intellectual property (IP) in your solution (patents, trade secrets, copyrights.) How do you (or will you) protect this IP? Why will this IP be a durable advantage in light of other means of solving the same problem?",
+              "scoring": {
+                "unsatisfactory": "No evidence of defensible IP.",
+                "marginal": "Unclear or flawed IP protection and/or ownership.",
+                "satisfactory": "Evidence of exclusive licensee or owner of meaningful IP.",
+                "superior": "Firm controls IP that constitutes a durable strategic advantage."
+              },
+              "weight": 3.75
+            }
+          }
+        },
+        "NON-NASA MARKET KNOWLEDGE": {
+          "weight": 25.0,
+          "sub_categories": {
+            "CUSTOMER ENGAGEMENT": {
+              "description": "Describe your relationships with non-NASA early-adopters who either (1) are doing business with you, or (2) will be doing business with you soon. Demonstrate you are building valuable customer relationships.",
+              "scoring": {
+                "unsatisfactory": "No evidence of customer engagement.",
+                "marginal": "Some evidence of customer engagement. Meeting with key earlyadopters and longerterm customers.",
+                "satisfactory": "Evidence of customer engagement and deepening relationships.",
+                "superior": "Significant evidence of customer engagement. In revenue, growing sales pipeline."
+              },
+              "weight": 6.25
+            },
+            "MARKET SEGMENTATION": {
+              "description": "Use an identified pain point to segment your market; these potential customers all have the same financially relevant problem. Succinctly describe the market segment you are targeting outside of NASA. What sets this segment apart from others?",
+              "scoring": {
+                "unsatisfactory": "No evidence of market segmentation.",
+                "marginal": "Coarse targeting. Likely over-reporting addressable market segment(s).",
+                "satisfactory": "Concisely defined market segmentation. Appropriately focused on the right customers.",
+                "superior": "Precision customer targeting of market. Ignores non-optimal customers."
+              },
+              "weight": 6.25
+            },
+            "MARKET SIZING ANALYSIS": {
+              "description": "Describe how large your market is. How credible is your knowledge? This is designed to assess the quality of your analysis, not the relative size of the market.",
+              "scoring": {
+                "unsatisfactory": "No evidence of market sizing analysis.",
+                "marginal": "Incomplete market sizing. Supported by inadequate or questionable data.",
+                "satisfactory": "Sufficient market sizing. Supported by comprehensive data analysis.",
+                "superior": "Convincing market sizing. Supported by topdown and bottom-up data analysis."
+              },
+              "weight": 6.25
+            },
+            "MARKET TIMING": {
+              "description": "Why is now the time to scale a company in your non-NASA market segment? Support your assertions by describing how current and emerging trends are converging to create your opportunity. How well do you understand those trends?",
+              "scoring": {
+                "unsatisfactory": "No \"why now?\" case presented. No evidence of trend analysis.",
+                "marginal": "Qualitative-only trend analysis. Developing \"why now?\" case.",
+                "satisfactory": "Sufficient \"why now?\" case. Some quantitative trend analysis data.",
+                "superior": "Convincing \"why now?\" case. Comprehensive trend analysis."
+              },
+              "weight": 6.25
+            }
+          }
+        },
+        "BUSINESS MODEL": {
+          "weight": 25.0,
+          "sub_categories": {
+            "PRICING": {
+              "description": "Describe your pricing model. What will you charge? To what evidence can you point that customers will find your pricing attractive? What are your resulting gross margin(s), and how will those margins eventually support organic growth for your firm (i.e. growth without external investments or grants.)",
+              "scoring": {
+                "unsatisfactory": "No evidence of pricing analysis.",
+                "marginal": "Reasonable customer value-proposition. Gross margin seem low.",
+                "satisfactory": "Compelling customer value-proposition. Grossmargins could sustain operations.",
+                "superior": "Validated selling price(s). Gross margins could fund organic growth."
+              },
+              "weight": 8.333333333333334
+            },
+            "SCALABILITY": {
+              "description": "Argue your business gets more attractive as it grows. What's required to reach economies of scale (and, if appropriate, economies of scope)?",
+              "scoring": {
+                "unsatisfactory": "Very difficult, perhaps impossible, to scale business as presented.",
+                "marginal": "Incomplete scaling plan. Some areas lack credibility.",
+                "satisfactory": "Feasible scaling plan. Unproven.",
+                "superior": "Validated scaling strategy. Successful analogs exist."
+              },
+              "weight": 8.333333333333334
+            },
+            "FUNDING STRATEGY": {
+              "description": "NASA Ignite aims to be the last SBIR funding for the firms it funds. Share your plans for funding to scale beyond SBIR funding. To the extent that raising risk capital (VC, angel, venture debt) is part of your plan, point to your best evidence that you'll successfully raise these funds. How would Ignite funding change your firm's capitalization trajectory?",
+              "scoring": {
+                "unsatisfactory": "Fails to present funding plan. Or, plan includes post-Ignite SBIR funding.",
+                "marginal": "Questionable funding plan to reach profitable growth without post- Ignite SBIR(s).",
+                "satisfactory": "Feasible funding plan to reach profitable growth without post-Ignite SBIR(s).",
+                "superior": "Committed funding + Ignite award likely sufficient to reach profitable growth without post-Ignite SBIR(s)."
+              },
+              "weight": 8.333333333333334
+            }
+          }
+        },
+        "TEAM": {
+          "weight": 25.0,
+          "sub_categories": {
+            "BUSINESS QUALIFICATIONS & EXPERIENCE": {
+              "description": "Briefly list and describe your business team. Please describe their qualifications and experience as it relates to successfully running commercial businesses. (Note: this is intentionally distinct from the \"Technical Qualifications & Experience\" metric below.)",
+              "scoring": {
+                "unsatisfactory": "Business people lack qualifications OR have no experience.",
+                "marginal": "Business people are somewhat qualified and have some experience.",
+                "satisfactory": "Business people are highly qualified OR have significant experience.",
+                "superior": "Business people are highly qualified AND have significant experience."
+              },
+              "weight": 8.333333333333334
+            },
+            "TECHNICAL QUALIFICATIONS & EXPERIENCE": {
+              "description": "Briefly list and describe your core scientific and technical team with an emphasis on their past accomplishments and experiences. Why are these the right technologists for this particular NASA subtopic?",
+              "scoring": {
+                "unsatisfactory": "Technical people lack qualifications OR have no experience.",
+                "marginal": "Technical people are somewhat qualified and have some experience.",
+                "satisfactory": "Technical people are highly qualified OR have significant experience.",
+                "superior": "Technical people are highly qualified AND have significant experience."
+              },
+              "weight": 8.333333333333334
+            },
+            "GAPS IN TEAM": {
+              "description": "Do you have the key people you need to get to through an eventual Phase II NASA effort? If not, convince the reader you have a credible recruiting plan and can fill personnel gaps.",
+              "scoring": {
+                "unsatisfactory": "Team requires new talent.",
+                "marginal": "Team recognizes gaps in personnel, but presents no plan to address needs.",
+                "satisfactory": "Team presents specific plan to address personnel needs.",
+                "superior": "Team with excellent composition. No nearterm personnel gaps."
+              },
+              "weight": 8.333333333333334
+            }
+          }
+        },
+        "PRESENTATION QUALITY": {
+          "weight": 5.0,
+          "sub_categories": {
+            "QUALITY OF PROSE": {
+              "description": "Provide a clear, well written, and convincing proposal. Avoid jargon and define technical terms.",
+              "scoring": {
+                "unsatisfactory": "Poorly written. Very difficult to impossible to follow argument. Several spelling or grammar errors.",
+                "marginal": "Moderately written. Sometimes difficult to follow argument. A few spelling / grammar errors.",
+                "satisfactory": "Effectively written. Convincing, easy to follow argument. No spelling or grammar errors.",
+                "superior": "Clearly and persuasively written. Compelling arguments. No spelling or grammar errors."
+              },
+              "weight": 2.5
+            },
+            "DATA QUALITY & ATTRIBUTION": {
+              "description": "Support your arguments with relevant, properly attributed data to enhance your credibility.",
+              "scoring": {
+                "unsatisfactory": "Poorly supported by data. Little to no attribution of sources.",
+                "marginal": "Partially supported by data. Some attribution of sources.",
+                "satisfactory": "Credibly supported by data. Data sources are properly attributed.",
+                "superior": "Persuasively supported by meaningful data. Fully attributed data greatly enhances investment thesis."
+              },
+              "weight": 2.5
+            }
+          }
+        }
+      }
+    },
+    "Technical": {
+      "weight": 70.0,
+      "categories": {
+        "BENEFITS": {
+          "weight": 30.0,
+          "sub_categories": {
+            "TECHNOLOGY DESCRIPTION": {
+              "description": "Describe your technology and how it addresses this NASA subtopic's need. What is it? What are its benefits? What makes it unique?",
+              "scoring": {
+                "unsatisfactory": "Fails to describe technology solution and beneficial features.",
+                "marginal": "Partly describes technology solution and beneficial features.",
+                "satisfactory": "Adequately describes technology solution and beneficial features.",
+                "superior": "Clearly and concisely describes technology solution and beneficial features."
+              },
+              "weight": 10.0
+            },
+            "ALIGNMENT": {
+              "description": "Argue your technology innovation is aligned with this NASA SBIR subtopic's priorities as defined in the solicitation.",
+              "scoring": {
+                "unsatisfactory": "Not aligned with this subtopic's priorities.",
+                "marginal": "Somewhat aligned with this subtopic's priorities.",
+                "satisfactory": "Aligned with this subtopic's priorities.",
+                "superior": "Highly aligned with this subtopic's priorities."
+              },
+              "weight": 10.0
+            },
+            "IMPACT": {
+              "description": "If successful, describe your technology's expected impact on the described subtopic need.",
+              "scoring": {
+                "unsatisfactory": "If successful, no improvement vs. existing technological approaches.",
+                "marginal": "If successful, slight improvement vs. existing technological approaches.",
+                "satisfactory": "If successful, significant improvement vs. existing technological approaches.",
+                "superior": "If successful, radical improvement vs. existing technological approaches."
+              },
+              "weight": 10.0
+            }
+          }
+        },
+        "ADVANCING THE STATE OF THE ART": {
+          "weight": 10.0,
+          "sub_categories": {
+            "ADVANCING THE STATE OF THE ART": {
+              "description": "Describe how your technology would improve the state of the art -- as described in the subtopic solicitation.",
+              "scoring": {
+                "unsatisfactory": "No improvement of the state of the art.",
+                "marginal": "Slightly improves the state of the art.",
+                "satisfactory": "Improves the state of the art.",
+                "superior": "Significantly improves the state of the art."
+              },
+              "weight": 10.0
+            }
+          }
+        },
+        "TECHNICAL RISK": {
+          "weight": 20.0,
+          "sub_categories": {
+            "TECHNICAL FEASIBILITY": {
+              "description": "Convince readers that your technology is built atop sound scientific and/or engineering principles.",
+              "scoring": {
+                "unsatisfactory": "No scientific basis for presented approach.",
+                "marginal": "Incomplete scientific basis for presented approach.",
+                "satisfactory": "Credible scientific basis for presented approach.",
+                "superior": "Convincing scientific basis for presented approach."
+              },
+              "weight": 6.666666666666667
+            },
+            "TECHNICAL RISKS AND MITIGATION PLANS": {
+              "description": "A key historical difference between success and failure in NASA's SBIR program is offerors' understanding of the unknowns and challenges they are likely to face in maturing their technologies. Prove to the reader that your team is sophisticated and clear-eyed in analyzing the remaining risks your technology faces. Demonstrate that you have plans to mitigate those risks. In this section, your risk narrative (to include mitigation plans) should be focused on technical matters. Please point out which risk mitigation plans would take place during a Phase I effort, during a Phase II effort and which would be post-Phase II.",
+              "scoring": {
+                "unsatisfactory": "Failed to present any technical risks.",
+                "marginal": "Inadequate risk analysis or mitigation plans.",
+                "satisfactory": "Credible risk analysis and mitigation plans.",
+                "superior": "Convincing risk analysis and mitigation plans."
+              },
+              "weight": 6.666666666666667
+            },
+            "DATA QUALITY": {
+              "description": "Do your best to prove your technical claims with quality data attributed to credible sources (including relevant academic research.) These data should logically support your technical feasibility arguments and risk narrative.",
+              "scoring": {
+                "unsatisfactory": "Poorly supported by data. Little to no data attribution.",
+                "marginal": "Partially supported by data. Some data attribution.",
+                "satisfactory": "Credibly supported by data. Adequate data attribution.",
+                "superior": "Persuasively supported by meaningful data. Comprehensive data attribution."
+              },
+              "weight": 6.666666666666667
+            }
+          }
+        },
+        "SBIR PROJECT PLAN": {
+          "weight": 15.0,
+          "sub_categories": {
+            "TIMELINES, MILESTONES, DELIVERABLES": {
+              "description": "Please share your execution plan with timeline, milestones and proposed deliverables.",
+              "scoring": {
+                "unsatisfactory": "Poor plan. Missing or badly flawed timelines, milestones, and deliverables.",
+                "marginal": "Marginal plan. Insufficient support from timelines, milestones, and deliverables.",
+                "satisfactory": "Satisfactory plan. Well supported with timelines, milestones, and deliverables.",
+                "superior": "Highly credible plan. Convincingly supported with timelines, milestones, and deliverables."
+              },
+              "weight": 7.5
+            },
+            "BUDGET": {
+              "description": "Provide a detailed breakdown of the base period of performance and the planned project costs to be incurred during the next period of performance.",
+              "scoring": {
+                "unsatisfactory": "Incomplete table of costs. Non-credible basis of estimate data.",
+                "marginal": "Complete table of costs. Somewhat credible basis of estimate data.",
+                "satisfactory": "Complete table of costs. Credible basis of estimate data.",
+                "superior": "Complete table of costs. Highly credible basis of estimate data."
+              },
+              "weight": 7.5
+            }
+          }
+        },
+        "TEAM ABILITY": {
+          "weight": 15.0,
+          "sub_categories": {
+            "TECHNICAL FACILITIES & RESOURCES": {
+              "description": "Briefly list and describe your technical facilities and resources. Do you have the resources and technical facilities you need to successfully complete your proposed project through a Phase II and beyond? If not, convince the reader you have a credible plan to attain the necessary facilities or resources to accomplish the proposed solution.",
+              "scoring": {
+                "unsatisfactory": "Existing facilities and resources insufficient. Gaps are high risk.",
+                "marginal": "Existing facilities and resources partially sufficient. Evolving plan for gaps.",
+                "satisfactory": "Existing facilities and resources mostly sufficient. Credible plan for gaps.",
+                "superior": "Existing facilities and resources certainly sufficient. No unresolved gaps."
+              },
+              "weight": 3.75
+            },
+            "TECHNICAL QUALIFICATIONS & EXPERIENCE": {
+              "description": "Briefly list and describe your core scientific and technical team with an emphasis on their past accomplishments and experiences. Why are these the right technologists for this particular NASA subtopic?",
+              "scoring": {
+                "unsatisfactory": "Technical people lack qualifications OR have no experience.",
+                "marginal": "Technical people are somewhat qualified and have some experience.",
+                "satisfactory": "Technical people are highly qualified OR have significant experience.",
+                "superior": "Technical people are highly qualified AND have significant experience."
+              },
+              "weight": 5.0
+            },
+            "GAPS IN TECHNICAL TEAM": {
+              "description": "Do you have the key technical people you need to get to through an eventual Phase II NASA award? If not, convince the reader you have a credible recruiting plan and can fill personnel gaps.",
+              "scoring": {
+                "unsatisfactory": "Team requires new talent.",
+                "marginal": "Team recognizes gaps in personnel, but presents no plan to address needs.",
+                "satisfactory": "Team presents specific plan to address personnel needs.",
+                "superior": "Team with excellent composition. No nearterm personnel gaps."
+              },
+              "weight": 5.0
+            },
+            "PARTNERSHIPS / SUBCONTRACTS": {
+              "description": "Describe any organizations with which you plan to partner as you mature the proposed technology. Emphasize any partnerships relevant through a Phase II award -- this is our main focus. Later partnerships (and plans) should be mentioned. Summarize the nature and timing of these partnerships. If partnering is not required to successfully mature your technology, please explain why.",
+              "scoring": {
+                "unsatisfactory": "Partnership development not addressed.",
+                "marginal": "Identified potential partners. No evidence of relationship building.",
+                "satisfactory": "Identified required partners. Evidence of progressing relationships.",
+                "superior": "Partnerships formally in place. Or, the offeror's team is well positioned without partnering."
+              },
+              "weight": 5.0
+            }
+          }
+        },
+        "SUBMISSION QUALITY": {
+          "weight": 5.0,
+          "sub_categories": {
+            "SUBMISSION QUALITY": {
+              "description": "Prove to the evaluators that you are capable of delivering a professional, polished and thoughtful proposal. (Please note: The Submission Quality Dimension is holistically evaluated across the materials you submit.)",
+              "scoring": {
+                "unsatisfactory": "Poorly written. Very difficult to impossible to follow. Several quality errors.",
+                "marginal": "Moderately written. Sometimes difficult to follow. Some quality errors.",
+                "satisfactory": "Effectively written. Convincing, easy to follow. No quality errors.",
+                "superior": "Clearly and persuasively written. Compelling arguments. No quality errors."
+              },
+              "weight": 5.0
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,61 +1,17 @@
-[project]
-name = "proposal-grader"
-version = "0.1.0"
-description = "AI-powered system for automated evaluation of SBIR/STTR proposals"
-authors = [
-    {name = "Dan Mueller",email = "dsm@danmueller.pro"}
-]
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-    "pdfminer-six>=20250506,<20250507",
-    "pymupdf>=1.26.3,<2.0.0",
-    "openpyxl>=3.1.5,<4.0.0",
-    "tiktoken>=0.9.0,<0.10.0",
-    "openai>=1.95.1,<2.0.0",
-    "python-dotenv>=1.1.1,<2.0.0",
-    "pyyaml>=6.0.2,<7.0.0",
-    "pathlib2>=2.3.7,<3.0.0; python_version < '3.4'"
-]
-
-[project.scripts]
-proposal-grader = "proposal_grader:main"
-solicitation-parser = "solicitation_parser:main"
-rubric-converter = "md_to_rubric_json:main"
-dummy-files = "create_dummy_files:main"
-grading-pipeline = "run_grading_pipeline:main"
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
-
 [tool.poetry]
 name = "proposal-grader"
 version = "0.1.0"
 description = "AI-powered system for automated evaluation of SBIR/STTR proposals"
 authors = ["Dan Mueller <dsm@danmueller.pro>"]
 readme = "README.md"
-packages = [{include = "proposal_grader", from = "."}]
 
 [tool.poetry.dependencies]
-python = "^3.11"
-pdfminer-six = "^20250506"
-pymupdf = "^1.26.3"
-openpyxl = "^3.1.5"
-tiktoken = "^0.9.0"
-openai = "^1.95.1"
-python-dotenv = "^1.1.1"
-pyyaml = "^6.0.2"
+python = "3.11.12"
+openai = "*"
+python-dotenv = "*"
+pypdf2 = "^3.0.1"
+langsmith = "^0.4.5"
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.0.0"
-black = "^23.0.0"
-flake8 = "^6.0.0"
-mypy = "^1.0.0"
-
-[tool.poetry.scripts]
-proposal-grader = "proposal_grader:main"
-solicitation-parser = "solicitation_parser:main"
-rubric-converter = "md_to_rubric_json:main"
-dummy-files = "create_dummy_files:main"
-grading-pipeline = "run_grading_pipeline:main"
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

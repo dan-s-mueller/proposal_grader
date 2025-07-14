@@ -1,0 +1,296 @@
+{
+  "required_files": [
+    {
+      "name": "technical_proposal",
+      "description": "Phase I Technical Proposal (≤ 15 pages)",
+      "file_patterns": [
+        "tech_proposal.pdf",
+        "technical_proposal.pdf",
+        "technical.pdf",
+        "tech.pdf",
+        "*technical*.pdf",
+        "*tech*.pdf",
+        "NASA_2025_SBIR_Ignite_PhaseI_I02.01_TechProposal_DM_RevE.pdf"
+      ],
+      "required": true
+    },
+    {
+      "name": "ignite_budget_form",
+      "description": "Ignite Budget Form (NASA template)",
+      "file_patterns": [
+        "ignite_budget_form.xlsx",
+        "ignite_budget_form.xls",
+        "budget.xlsx",
+        "budget.xls",
+        "costs.xlsx",
+        "costs.xls",
+        "financial.xlsx",
+        "financial.xls",
+        "*budget*.xlsx",
+        "*budget*.xls",
+        "NASA_SBIR_Ignite_Phase_I-proposal-budget-form_I02.01_DM_2025.pdf"
+      ],
+      "required": true
+    },
+    {
+      "name": "proposal_endorsement",
+      "description": "Proposal Endorsement form (NASA template)",
+      "file_patterns": [
+        "proposal_endorsement.pdf",
+        "endorsement.pdf",
+        "endorsement_form.pdf",
+        "*endorsement*.pdf"
+      ],
+      "required": true
+    },
+    {
+      "name": "sba_registry",
+      "description": "SBA Company Registry Confirmation",
+      "file_patterns": [
+        "sba_registry.pdf",
+        "sba_registry_confirmation.pdf",
+        "sba_company_registry.pdf",
+        "sba_confirmation.pdf",
+        "*sba*.pdf",
+        "*sbc*.pdf"
+      ],
+      "required": true
+    },
+    {
+      "name": "foreign_disclosures",
+      "description": "Disclosures of Foreign Affiliations or Relationships to Foreign Countries",
+      "file_patterns": [
+        "foreign_disclosures.pdf",
+        "foreign_affiliations.pdf",
+        "foreign_relationships.pdf",
+        "foreign_disclosure.pdf",
+        "*foreign*.pdf"
+      ],
+      "required": false
+    }
+  ],
+  "optional_files": [
+    {
+      "name": "joint_venture_agreement",
+      "description": "Joint-venture or partnership agreement (only if JV/LP)",
+      "file_patterns": [
+        "joint_venture_agreement.pdf",
+        "partnership_agreement.pdf",
+        "jv_agreement.pdf",
+        "partnership.pdf",
+        "*joint*venture*.pdf",
+        "*partnership*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "federal_audit_report",
+      "description": "Federal Agency audit report (if audited)",
+      "file_patterns": [
+        "federal_audit_report.pdf",
+        "audit_report.pdf",
+        "federal_audit.pdf",
+        "*audit*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "prior_awards_addendum",
+      "description": "Prior Awards Addendum (only if > 15 Phase II awards in last 5 years)",
+      "file_patterns": [
+        "prior_awards_addendum.pdf",
+        "prior_awards.pdf",
+        "awards_addendum.pdf",
+        "*prior*awards*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "commercialization_metrics",
+      "description": "Commercialization Metrics Report (CMR) from SBIR.gov",
+      "file_patterns": [
+        "commercialization_metrics.pdf",
+        "cmr.pdf",
+        "commercialization_report.pdf",
+        "*cmr*.pdf",
+        "*commercialization*metrics*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "deviation_agreements",
+      "description": "Deviation agreements (PI/PM < 50% LOE, < 66% work at awardee, outside-US R&D, off-site R&D)",
+      "file_patterns": [
+        "deviation_agreements.pdf",
+        "deviation_agreement.pdf",
+        "deviations.pdf",
+        "*deviation*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "essentially_equivalent_work",
+      "description": "Essentially Equivalent Work statement (if submitting similar work elsewhere)",
+      "file_patterns": [
+        "essentially_equivalent_work.pdf",
+        "equivalent_work.pdf",
+        "equivalent_work_statement.pdf",
+        "*equivalent*work*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "nasa_evaluation_license",
+      "description": "NASA Evaluation License Application (only when proposing a TAV)",
+      "file_patterns": [
+        "nasa_evaluation_license.pdf",
+        "evaluation_license.pdf",
+        "nasa_license.pdf",
+        "*evaluation*license*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "subcontractor_letters",
+      "description": "Letters of commitment from subcontractors/consultants",
+      "file_patterns": [
+        "subcontractor_letters.pdf",
+        "consultant_letters.pdf",
+        "subcontractor_commitment.pdf",
+        "consultant_commitment.pdf",
+        "*subcontractor*.pdf",
+        "*consultant*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "government_resources_approval",
+      "description": "Letter from a Government official approving use of Government resources",
+      "file_patterns": [
+        "government_resources_approval.pdf",
+        "gov_resources_approval.pdf",
+        "government_approval.pdf",
+        "*government*resources*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "related_rd_proposals",
+      "description": "Related R&D Proposals and Awards (if already pursued similar work)",
+      "file_patterns": [
+        "related_rd_proposals.pdf",
+        "related_proposals.pdf",
+        "rd_proposals.pdf",
+        "*related*rd*.pdf",
+        "*related*proposals*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "materials_supplies_docs",
+      "description": "Materials & Supplies supporting docs (if claiming M&S)",
+      "file_patterns": [
+        "materials_supplies_docs.pdf",
+        "materials_supplies.pdf",
+        "materials_docs.pdf",
+        "supplies_docs.pdf",
+        "*materials*supplies*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "equipment_docs",
+      "description": "Equipment supporting docs (if claiming equipment)",
+      "file_patterns": [
+        "equipment_docs.pdf",
+        "equipment_supporting.pdf",
+        "equipment.pdf",
+        "*equipment*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "other_direct_costs_docs",
+      "description": "Other Direct Costs supporting docs (if claiming ODCs)",
+      "file_patterns": [
+        "other_direct_costs_docs.pdf",
+        "odc_docs.pdf",
+        "other_costs.pdf",
+        "*odc*.pdf",
+        "*other*direct*costs*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "travel_docs",
+      "description": "Travel supporting docs (if claiming travel)",
+      "file_patterns": [
+        "travel_docs.pdf",
+        "travel_supporting.pdf",
+        "travel.pdf",
+        "*travel*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "subcontractor_cost_docs",
+      "description": "Subcontractor/Consultant cost docs (if using subs/consultants)",
+      "file_patterns": [
+        "subcontractor_cost_docs.pdf",
+        "consultant_cost_docs.pdf",
+        "subcontractor_costs.pdf",
+        "consultant_costs.pdf",
+        "*subcontractor*cost*.pdf",
+        "*consultant*cost*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "taba_docs",
+      "description": "TABA supporting docs (if requesting TABA)",
+      "file_patterns": [
+        "taba_docs.pdf",
+        "taba_supporting.pdf",
+        "taba.pdf",
+        "*taba*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "foreign_vendor_form",
+      "description": "Foreign Vendor Form (if any foreign vendors)",
+      "file_patterns": [
+        "foreign_vendor_form.pdf",
+        "foreign_vendor.pdf",
+        "vendor_form.pdf",
+        "*foreign*vendor*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "box_submission_confirmation",
+      "description": "Box Submission Confirmation (only if technical proposal is ITAR/EAR)",
+      "file_patterns": [
+        "box_submission_confirmation.pdf",
+        "box_confirmation.pdf",
+        "submission_confirmation.pdf",
+        "*box*submission*.pdf"
+      ],
+      "required": false
+    },
+    {
+      "name": "follow_on_funding_evidence",
+      "description": "Evidence of follow-on funding commitment (letters or term sheets)",
+      "file_patterns": [
+        "follow_on_funding_evidence.pdf",
+        "follow_on_funding.pdf",
+        "funding_commitment.pdf",
+        "funding_evidence.pdf",
+        "*follow*on*funding*.pdf",
+        "*funding*commitment*.pdf",
+        "*funding*support*.pdf"
+      ],
+      "required": false
+    }
+  ]
+} 
