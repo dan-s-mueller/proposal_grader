@@ -10,7 +10,7 @@
         "tech.pdf",
         "*technical*.pdf",
         "*tech*.pdf",
-        "NASA_2025_SBIR_Ignite_PhaseI_I02.01_TechProposal_DM_RevE.pdf"
+        "submission*Ignite*.pdf"
       ],
       "required": true
     },

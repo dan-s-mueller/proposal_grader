@@ -14,6 +14,8 @@ from typing import List, Optional
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_openai import ChatOpenAI
+import argparse
+from csv_rubric_parser import create_prompt_templates, save_prompt_templates
 
 # --- CONFIGURATION ---
 RUBRIC_PATH = Path("output/complete_rubric.json")
@@ -47,14 +49,25 @@ def load_prompt(code: str) -> str:
     with open(prompt_path, "r") as f:
         return f.read()
 
-def extract_pdf_text(pdf_path: Path) -> str:
-    import PyPDF2
-    text = ""
-    with open(pdf_path, "rb") as f:
-        reader = PyPDF2.PdfReader(f)
-        for page in reader.pages:
-            text += page.extract_text() or ""
-    return text
+def extract_pdf_markdown(pdf_path: Path, output_dir: Path) -> Path:
+    """Converts a PDF to markdown using marker-pdf and returns the markdown file path."""
+    import logging
+    import time
+    from marker.converters.pdf import PdfConverter
+    from marker.models import create_model_dict
+    from marker.output import text_from_rendered
+    output_dir.mkdir(parents=True, exist_ok=True)
+    md_path = output_dir / (pdf_path.stem + ".md")
+    logging.info(f"[PDF2MD] Starting conversion: {pdf_path} -> {md_path}")
+    start_time = time.time()
+    converter = PdfConverter(artifact_dict=create_model_dict())
+    rendered = converter(str(pdf_path))
+    text, _, images = text_from_rendered(rendered)
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    elapsed = time.time() - start_time
+    logging.info(f"[PDF2MD] Finished conversion: {pdf_path} -> {md_path} in {elapsed:.1f}s")
+    return md_path
 
 def find_files_by_patterns(root: Path, patterns: List[str]) -> List[Path]:
     import fnmatch
@@ -82,16 +95,26 @@ def model_supports_temperature(model_name: str) -> bool:
 
 # --- MAIN PIPELINE ---
 class RubricScore(BaseModel):
-    score: int = Field(..., ge=1, le=4)
+    score: float = Field(..., ge=1, le=4)
     evidence: str
     reasoning: str
     improvements: Optional[str] = ""
 
 # @traceable
 def main():
+    import argparse
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     model = os.getenv("OPENAI_MODEL")
+
+    # --- ARGPARSE FOR MARKDOWN REGENERATION ---
+    parser = argparse.ArgumentParser(description="NASA SBIR Ignite Proposal Grader")
+    parser.add_argument("--regen-md", choices=["all", "none", "file", "folder"], default="all",
+                        help="Regenerate markdown files: all, none, file, or folder (default: all)")
+    parser.add_argument("--file", type=str, default=None, help="Path to a single PDF file to convert (used with --regen-md file)")
+    parser.add_argument("--folder", type=str, default=None, help="Path to a folder of PDFs to convert (used with --regen-md folder)")
+    args, unknown = parser.parse_known_args()
+
     if not api_key:
         logging.error("OPENAI_API_KEY not set in environment.")
         sys.exit(1)
@@ -99,6 +122,13 @@ def main():
         logging.error("OPENAI_MODEL not set in environment.")
         sys.exit(1)
     # client = wrappers.wrap_openai(OpenAI(api_key=api_key))
+
+    # Always regenerate prompt templates from rubric
+    logging.info("[PROMPTS] Regenerating prompt templates from rubric...")
+    rubric_structure = load_json(RUBRIC_PATH)
+    prompt_templates = create_prompt_templates(rubric_structure)
+    save_prompt_templates(prompt_templates, PROMPTS_DIR)
+    logging.info(f"[PROMPTS] Prompt templates regenerated in {PROMPTS_DIR.resolve()}")
 
     # 1. Load rubric and file config
     rubric = load_json(RUBRIC_PATH)
@@ -124,11 +154,60 @@ def main():
         if matches:
             found_files[file_spec["name"]] = matches[0]
 
-    # 3. Aggregate all proposal text from required PDFs
+    # 3. Aggregate all proposal text from required PDFs (now as markdown)
+    proposal_markdown_dir = Path("output/markdown")
     proposal_text = ""
+
+    # --- PDF-to-Markdown Regeneration Logic (argparse version) ---
+    files_to_convert = []
+    if args.regen_md == "all":
+        logging.info("[PDF2MD] Regenerating markdown for ALL required proposal PDFs...")
+        for file in found_files.values():
+            if file.suffix.lower() == ".pdf":
+                files_to_convert.append(file)
+    elif args.regen_md == "none":
+        logging.info("[PDF2MD] Skipping markdown regeneration. Using existing markdown files.")
+    elif args.regen_md == "file":
+        if args.file:
+            pdf_path = Path(args.file)
+            if pdf_path.exists() and pdf_path.suffix.lower() == ".pdf":
+                files_to_convert.append(pdf_path)
+                logging.info(f"[PDF2MD] Regenerating markdown for single file: {pdf_path}")
+            else:
+                print(f"File not found or not a PDF: {pdf_path}")
+                logging.warning(f"[PDF2MD] File not found or not a PDF: {pdf_path}")
+        else:
+            print("--file argument required with --regen-md file")
+            logging.warning("[PDF2MD] --file argument required with --regen-md file")
+    elif args.regen_md == "folder":
+        if args.folder:
+            folder_path = Path(args.folder)
+            if folder_path.exists() and folder_path.is_dir():
+                for file in folder_path.rglob("*.pdf"):
+                    files_to_convert.append(file)
+                logging.info(f"[PDF2MD] Regenerating markdown for all PDFs in folder: {folder_path}")
+            else:
+                print(f"Folder not found: {folder_path}")
+                logging.warning(f"[PDF2MD] Folder not found: {folder_path}")
+        else:
+            print("--folder argument required with --regen-md folder")
+            logging.warning("[PDF2MD] --folder argument required with --regen-md folder")
+
+    # If files_to_convert is not empty, regenerate markdown for those files
+    if files_to_convert:
+        for file in files_to_convert:
+            md_path = extract_pdf_markdown(file, proposal_markdown_dir)
+    # Now aggregate proposal_text from all required markdowns (regenerated or existing)
+    logging.info("[PDF2MD] Aggregating proposal text from markdown files...")
     for file in found_files.values():
         if file.suffix.lower() == ".pdf":
-            proposal_text += extract_pdf_text(file) + "\n"
+            md_path = proposal_markdown_dir / (file.stem + ".md")
+            if md_path.exists():
+                with open(md_path, "r", encoding="utf-8") as f:
+                    proposal_text += f.read() + "\n"
+            else:
+                logging.warning(f"[PDF2MD] Markdown file not found for {file}, expected at {md_path}")
+    logging.info(f"[PDF2MD] Proposal text aggregation complete. Markdown files used from {proposal_markdown_dir.resolve()}")
 
     # Read technical solicitation description
     with open("documents/solicitations/technical_description.md", "r", encoding="utf-8") as f:
@@ -136,7 +215,13 @@ def main():
     # Read FAQ guidance
     with open("documents/solicitations/faq.md", "r", encoding="utf-8") as f:
         faq_guidance = f.read().strip()
-    # logging.info(f"Raw technical_description content read:\n{technical_description}")
+
+    # --- USER REVIEW PAUSE ---
+    response = input("Markdown files have been generated in 'output/markdown/'.\nReview them if desired.\nContinue with LLM evaluation? (Y/N): ")
+    if response.strip().lower() != "y":
+        print("Aborting before LLM evaluation.")
+        sys.exit(0)
+    # --- END USER REVIEW PAUSE ---
 
     # 6. Output CSV report (write header at start)
     with open(CSV_OUTPUT, "w", newline="", encoding="utf-8") as csvfile:
@@ -163,7 +248,7 @@ def main():
         "Your sole role is an **objective, conservative evaluator** for NASA SBIR Ignite Phase I proposals.\n\n"
         "TASK (per call)\n"
         "1. Read the rubric element and the proposal text the user supplies."
-        "2. Assign a single integer **score (1–4)** using ONLY the scoring rubric in the user prompt.Err on the side of strictness—when in doubt, choose the lower score."
+        "2. Assign a single **score (1–4, in 0.5 increments only)** using ONLY the scoring rubric in the user prompt. Err on the side of strictness—when in doubt, choose the lower score."
     )
     # logging.info(f"SYSTEM_PROMPT used for LLM:\n{SYSTEM_PROMPT}")
     for section_name, section in rubric["types"].items():
