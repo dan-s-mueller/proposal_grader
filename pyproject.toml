@@ -5,6 +5,7 @@ description = "AI-powered system for automated evaluation of SBIR/STTR proposals
 authors = ["Dan Mueller <dsm@danmueller.pro>"]
 readme = "README.md"
 package-mode = false
+packages = []
 
 [tool.poetry.dependencies]
 python = "3.11.12"

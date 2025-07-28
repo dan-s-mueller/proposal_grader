@@ -2,15 +2,15 @@
   "llm": {
     "agent_reviews": {
       "model": "gpt-4o",
-      "temperature": 0.1
+      "temperature": 0.7
     },
     "solicitation_processing": {
       "model": "gpt-3.5-turbo",
-      "temperature": 0.0
+      "temperature": 0.3
     },
     "default": {
       "model": "gpt-4o",
-      "temperature": 0.1
+      "temperature": 0.5
     }
   },
   "output": {

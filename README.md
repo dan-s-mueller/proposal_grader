@@ -54,8 +54,12 @@ proposal_grader/
 ├── documents/
 │   ├── proposal/
 │   │   ├── main_proposal.docx    # Main proposal (Word preferred, PDF supported)
+│   │   ├── processed/            # Cached processed documents
+│   │   │   └── {filename}_processed.json
 │   │   └── supporting_docs/      # Supporting PDFs and DOCXs (supports sub-folders)
+│   │       └── processed/        # Supporting docs summary
 │   └── solicitation/             # Solicitation PDFs, CSVs, and MDs (supports sub-folders)
+│       └── processed/            # Solicitation docs summary
 ├── output/                       # All outputs
 │   ├── feedback/
 │   │   ├── tech_lead.md
@@ -111,6 +115,9 @@ poetry run review
 
 # Run with specific agents
 poetry run review --agents tech_lead,business_strategist,panel_scorer
+
+# Skip document processing (use cached processed documents)
+poetry run review --no-process-docs
 
 # List available agents
 poetry run list-agents

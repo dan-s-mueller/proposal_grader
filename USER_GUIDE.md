@@ -81,7 +81,53 @@ Review and trim if necessary. Keep exact criterion wording.
 
 ---
 
-## 3. Prepare proposal and support docs
+## 3. Configuration
+
+### 3.1 System Configuration
+
+The system uses `config/system_config.json` for centralized configuration:
+
+**LLM Settings:**
+- `agent_reviews`: GPT-4o with temperature 0.7 (for agent reviews)
+- `solicitation_processing`: GPT-3.5-turbo with temperature 0.3 (for document processing)
+- `default`: GPT-4o with temperature 0.5 (fallback)
+
+**Output Settings:**
+- `save_individual_agent_outputs`: Save individual agent feedback files
+- `save_consolidated_summary`: Save consolidated summary
+- `save_action_items`: Save action items list
+
+**Default Agents:**
+- tech_lead, business_strategist, detail_checker, panel_scorer, storyteller
+
+### 3.2 View Configuration
+
+```bash
+poetry run show-config
+```
+
+### 3.3 Customizing Temperature
+
+Edit `config/system_config.json` to adjust temperature settings:
+
+```json
+{
+  "llm": {
+    "agent_reviews": {
+      "model": "gpt-4o",
+      "temperature": 0.7  # Higher for more creative agent responses
+    },
+    "solicitation_processing": {
+      "model": "gpt-3.5-turbo", 
+      "temperature": 0.3  # Lower for more consistent document processing
+    }
+  }
+}
+```
+
+---
+
+## 4. Prepare proposal and support docs
 
 1. Confirm `documents/proposal/main_proposal.docx` uses proper headings (H1, H2) for best results. PDF is supported but DOCX preferred.
 2. Place all supporting PDFs and DOCXs in `documents/proposal/supporting_docs/` (supports sub-folders).
@@ -89,9 +135,9 @@ Review and trim if necessary. Keep exact criterion wording.
 
 ---
 
-## 4. Run the asynchronous multi agent review
+## 5. Run the asynchronous multi agent review
 
-### 4.1 Default run (all agents)
+### 5.1 Default run (all agents)
 ```bash
 poetry run review
 ```
@@ -101,23 +147,29 @@ Uses:
 - `output/criteria.json`
 - Agents: tech_lead,business_strategist,detail_checker,panel_scorer,storyteller
 - Output folder: `output/`
+- Document processing: Enabled (default)
 
-### 4.2 Custom agent configuration
+### 5.2 Custom agent configuration
 ```bash
 poetry run review --agents tech_lead,business_strategist,panel_scorer
 ```
 
-### 4.3 Override defaults (optional)
+### 5.3 Skip document processing (use cached processed documents)
+```bash
+poetry run review --no-process-docs
+```
+
+### 5.4 Override defaults (optional)
 ```bash
 poetry run review   --proposal-dir documents/proposal   --supporting-dir documents/proposal/supporting_docs   --solicitation-dir documents/solicitation   --agents tech_lead,business_strategist
 ```
 
-### 4.4 List available agents
+### 5.5 List available agents
 ```bash
 poetry run list-agents
 ```
 
-### 4.5 Visualize workflow structure
+### 5.6 Visualize workflow structure
 ```bash
 poetry run visualize-workflow
 ```
@@ -130,7 +182,7 @@ What happens:
 
 ---
 
-## 5. Outputs
+## 6. Outputs
 
 All outputs are saved to the `output/` folder:
 
@@ -144,11 +196,31 @@ All outputs are saved to the `output/` folder:
 | `output/solicitation.md` | Solicitation markdown snapshot |
 | `output/workflow.png` | Workflow visualization diagram |
 
+### 6.1 Processed Document Storage
+
+When documents are processed, they are automatically saved to `processed/` subfolders:
+
+**Proposal Documents:**
+- `documents/proposal/processed/{filename}_processed.json` - Processed main proposal
+- `documents/proposal/supporting_docs/processed/supporting_docs_summary.json` - Supporting docs summary
+
+**Solicitation Documents:**
+- `documents/solicitation/processed/solicitation_docs_summary.json` - Solicitation docs summary
+
+These processed documents contain:
+- Original file metadata
+- Extracted text content
+- Processing timestamps
+- File format information
+- Content statistics
+
+You can use `--no-process-docs` to skip document processing and use cached processed documents for faster subsequent runs.
+
 ---
 
-## 6. File Format Support
+## 7. File Format Support
 
-### 6.1 Proposal Documents
+### 7.1 Proposal Documents
 
 **Main Proposal:**
 - **DOCX** (preferred): Full heading structure preserved, best for analysis
@@ -158,7 +230,7 @@ All outputs are saved to the `output/` folder:
 - **PDF**: Converted to markdown text
 - **DOCX**: Extracted as plain text with paragraph structure
 
-### 6.2 Solicitation Documents
+### 7.2 Solicitation Documents
 
 **PDF Files:**
 - Main solicitation documents
@@ -178,7 +250,7 @@ All outputs are saved to the `output/` folder:
 - Pre-formatted markdown content
 - Used directly as-is
 
-### 6.3 Folder Organization
+### 7.3 Folder Organization
 
 The system supports flexible folder organization:
 
@@ -210,9 +282,9 @@ All files are discovered recursively and processed appropriately based on their 
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
-### 7.1 File Discovery Issues
+### 8.1 File Discovery Issues
 
 **Problem**: "Main proposal not found"
 **Solution**: 
@@ -232,7 +304,7 @@ All files are discovered recursively and processed appropriately based on their 
 - Ensure files are PDF, CSV, or MD format
 - Verify files are not corrupted
 
-### 7.2 Processing Issues
+### 8.2 Processing Issues
 
 **Problem**: "Failed to process PDF"
 **Solution**:
@@ -254,9 +326,9 @@ All files are discovered recursively and processed appropriately based on their 
 
 ---
 
-## 8. Advanced Configuration
+## 9. Advanced Configuration
 
-### 8.1 Custom File Patterns
+### 9.1 Custom File Patterns
 
 The system uses these patterns to find files:
 
@@ -273,88 +345,4 @@ The system uses these patterns to find files:
 - `*.docx` (any DOCX file)
 
 **Solicitation Documents:**
-- `*.pdf` (any PDF file)
-- `*.csv` (any CSV file)
-- `*.md` (any markdown file)
-
-### 8.2 Sub-folder Support
-
-All document types support sub-folder organization:
-
-- Files are discovered recursively using `rglob()`
-- Original folder structure is preserved in processing
-- No depth limit on sub-folders
-- Maintains file paths in output for reference
-
----
-
-## 9. Performance Considerations
-
-### 9.1 File Size Limits
-
-- **PDF**: No artificial limits, natural LLM limits apply
-- **DOCX**: No artificial limits, natural LLM limits apply
-- **CSV**: No artificial limits, natural LLM limits apply
-- **MD**: No artificial limits, natural LLM limits apply
-
-### 9.2 Processing Speed
-
-- **PDF**: Slower due to conversion process
-- **DOCX**: Fastest processing
-- **CSV**: Very fast processing
-- **MD**: Instant processing
-
-### 9.3 Memory Usage
-
-- Large PDFs may use significant memory during conversion
-- Consider splitting very large documents if needed
-- System will encounter natural LLM limits rather than artificial truncation
-
----
-
-## 10. Agent Templates
-
-Agent behavior is defined by templates in `src/agents/templates/`:
-
-### Template Structure
-Each agent template contains:
-- **Agent Identity**: Name, role, focus, hates
-- **Expertise Areas**: Key areas of expertise
-- **Critical Focus Areas**: What to be critical of
-- **Output Format**: How to structure feedback
-- **Scoring Criteria**: How to score (1.0-4.0 scale)
-- **Review Style**: Tone and approach
-
-### Customizing Agents
-To modify agent behavior:
-1. Edit the template file in `src/agents/templates/<agent_id>.md`
-2. Restart the review process
-3. The new template will be used automatically
-
-### Adding New Agents
-1. Create new template file: `src/agents/templates/new_agent.md`
-2. Follow the template structure above
-3. Use the agent: `poetry run review --agents new_agent`
-
----
-
-## 11. System Architecture
-
-The new system uses:
-- **LangGraph**: Concurrent workflow orchestration
-- **OpenAI**: Direct API calls with LangSmith tracing
-- **Agent Templates**: Configurable agent behavior
-- **python-docx**: Word document processing with heading structure
-- **marker-pdf**: PDF to markdown conversion
-- **csv**: CSV to text conversion
-- **Pydantic**: Type-safe state management
-
-Key improvements:
-- Template-based agent configuration
-- Concurrent agent execution
-- Better error handling and recovery
-- Structured output formats
-- Modular agent system for easy extension
-- LangSmith integration for observability
-- Multi-format document support
-- Sub-folder organization support
+- `

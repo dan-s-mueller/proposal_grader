@@ -30,20 +30,25 @@ class ConfigLoader:
         Get LLM configuration for a specific context.
         
         Args:
-            context: One of "agent_reviews", "solicitation_processing", or "default"
-        
+            context: The context for which to get LLM config (e.g., 'agent_reviews', 'solicitation_processing', 'default')
+            
         Returns:
-            Dictionary with model, temperature
+            Dictionary with model, temperature, and other LLM settings
         """
-        llm_configs = self.config.get("llm", {})
+        config = self.config.get("llm", {}).get(context, {})
         
-        if context in llm_configs:
-            return llm_configs[context]
-        else:
-            return llm_configs.get("default", {
-                "model": "gpt-4o",
-                "temperature": 0.1
-            })
+        if not config:
+            # Fallback to default if context not found
+            config = self.config.get("llm", {}).get("default", {})
+        
+        # Ensure we have at least a model
+        if "model" not in config:
+            raise ValueError(f"No model specified for LLM context: {context}")
+        
+        return {
+            "model": config["model"],
+            "temperature": config.get("temperature", 0.5)  # Default temperature if not specified
+        }
     
     def get_output_config(self) -> Dict[str, Any]:
         """Get output configuration."""

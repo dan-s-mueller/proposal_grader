@@ -10,6 +10,9 @@ from pathlib import Path
 class ReviewState(BaseModel):
     """State model for the review workflow."""
     
+    # Document processing control
+    should_process_docs: bool = Field(default=True, description="Whether to process documents")
+    
     # Document processing status
     documents_processed: bool = Field(default=False, description="Whether documents have been processed")
     processing_error: Optional[str] = Field(default=None, description="Error during document processing")
@@ -20,8 +23,11 @@ class ReviewState(BaseModel):
     criteria: Dict[str, Any] = Field(default_factory=dict, description="Evaluation criteria from solicitation")
     solicitation_md: str = Field(default="", description="Solicitation markdown")
     
-    # Dynamic agent outputs (will be set based on actual agents used)
-    # These will be dynamically added to the state as {agent_id}_output
+    # Agent outputs (stored as dictionary to handle dynamic agents)
+    agent_outputs: Dict[str, Any] = Field(default_factory=dict, description="Agent outputs by agent_id")
+    
+    # Track completed agents to avoid concurrent update conflicts
+    completed_agents: List[str] = Field(default_factory=list, description="List of completed agent IDs")
     
     # Aggregated results
     all_agent_outputs: List[Dict[str, Any]] = Field(default_factory=list, description="All agent outputs")

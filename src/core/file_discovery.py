@@ -29,7 +29,9 @@ class FileDiscovery:
         docx_patterns = [
             "main_proposal.docx",
             "*proposal*.docx",
-            "*main*.docx"
+            "*main*.docx",
+            "*submission*.docx",  # Added for submission files
+            "*.docx"  # Fallback to any DOCX file
         ]
         
         for pattern in docx_patterns:
@@ -43,6 +45,7 @@ class FileDiscovery:
             "main_proposal.pdf",
             "*proposal*.pdf",
             "*main*.pdf",
+            "*submission*.pdf",  # Added for submission files
             "submission*.pdf"
         ]
         

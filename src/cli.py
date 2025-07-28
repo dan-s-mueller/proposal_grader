@@ -89,13 +89,14 @@ async def run_review_command(args):
     # Parse agent configuration
     agent_config = args.agents.split(',') if args.agents else None
     
-    # Create workflow with document paths
+    # Create workflow with document paths and processing flag
     workflow = ReviewWorkflow(
         client, 
         agent_config, 
         proposal_dir=proposal_dir,
         supporting_dir=supporting_dir,
-        solicitation_dir=solicitation_dir
+        solicitation_dir=solicitation_dir,
+        should_process_docs=args.process_docs
     )
     
     # Run the review workflow
@@ -111,7 +112,7 @@ async def run_review_command(args):
         
         # Save individual agent feedback
         for agent_id in workflow.agent_config:
-            agent_output = getattr(final_state, f"{agent_id}_output", None)
+            agent_output = final_state.agent_outputs.get(agent_id, None)
             if agent_output:
                 output_formatter.save_agent_feedback(agent_output, output_dir)
         
@@ -128,6 +129,7 @@ async def run_review_command(args):
         print("✓ Multi-agent review completed successfully")
         print(f"  - Output directory: {output_dir}")
         print(f"  - Agents used: {', '.join(workflow.agent_config)}")
+        print(f"  - Document processing: {'Enabled' if args.process_docs else 'Skipped'}")
         
     except Exception as e:
         print(f"✗ Review workflow failed: {e}")
@@ -156,7 +158,6 @@ async def list_agents_command(args):
         print(f"Agent ID: {agent_id}")
         print(f"  Name: {agent_info.get('name', 'N/A')}")
         print(f"  Focus: {agent_info.get('focus', 'N/A')}")
-        print(f"  Expertise: {agent_info.get('expertise', 'N/A')[:100]}...")
         print()
 
 
@@ -183,32 +184,31 @@ async def show_config_command(args):
     """Command to show system configuration."""
     print("=== System Configuration ===")
     
-    # Load configuration
-    config_loader = ConfigLoader()
-    
-    # Show LLM contexts
-    print("LLM Contexts:")
-    contexts = config_loader.list_llm_contexts()
-    for context, description in contexts.items():
-        config = config_loader.get_llm_config(context)
-        print(f"  {context}:")
-        print(f"    Description: {description}")
-        print(f"    Model: {config.get('model', 'N/A')}")
-        print(f"    Temperature: {config.get('temperature', 'N/A')}")
-        print()
-    
-    # Show output config
-    print("Output Configuration:")
-    output_config = config_loader.get_output_config()
-    for key, value in output_config.items():
-        print(f"  {key}: {value}")
-    print()
-    
-    # Show default agents
-    print("Default Agents:")
-    default_agents = config_loader.get_default_agents()
-    for agent in default_agents:
-        print(f"  - {agent}")
+    try:
+        config_loader = ConfigLoader()
+        
+        print("\nLLM Configurations:")
+        for context in ["agent_reviews", "solicitation_processing", "default"]:
+            try:
+                config = config_loader.get_llm_config(context)
+                print(f"  {context}:")
+                print(f"    Model: {config.get('model', 'N/A')}")
+                print(f"    Temperature: {config.get('temperature', 'N/A')}")
+            except Exception as e:
+                print(f"  {context}: Error - {e}")
+        
+        print("\nOutput Configuration:")
+        output_config = config_loader.get_output_config()
+        for key, value in output_config.items():
+            print(f"  {key}: {value}")
+        
+        print("\nDefault Agents:")
+        default_agents = config_loader.get_default_agents()
+        print(f"  {', '.join(default_agents)}")
+        
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        sys.exit(1)
 
 
 def main():
@@ -233,6 +233,10 @@ def main():
                               help="Directory containing solicitation documents")
     review_parser.add_argument("--agents", 
                               help="Comma-separated list of agents to use (e.g., tech_lead,business_strategist)")
+    review_parser.add_argument("--process-docs", action="store_true", default=True,
+                              help="Process documents (default: True)")
+    review_parser.add_argument("--no-process-docs", dest="process_docs", action="store_false",
+                              help="Skip document processing (use cached processed documents)")
     
     # List agents command
     list_parser = subparsers.add_parser("list-agents", help="List available agents")

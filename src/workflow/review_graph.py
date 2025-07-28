@@ -22,7 +22,7 @@ class ReviewWorkflow:
     
     def __init__(self, openai_client: OpenAI, agent_config: List[str] = None, 
                  proposal_dir: Path = None, supporting_dir: Path = None, 
-                 solicitation_dir: Path = None):
+                 solicitation_dir: Path = None, should_process_docs: bool = True):
         self.client = openai_client
         self.logger = logging.getLogger(__name__)
         
@@ -30,6 +30,7 @@ class ReviewWorkflow:
         self.proposal_dir = proposal_dir
         self.supporting_dir = supporting_dir
         self.solicitation_dir = solicitation_dir
+        self.should_process_docs = should_process_docs
         
         # Default agent configuration
         if agent_config is None:
@@ -89,6 +90,12 @@ class ReviewWorkflow:
         """Process documents and populate state with parsed data."""
         self.logger.info("Processing documents...")
         
+        # Check if we should process documents
+        if not self.should_process_docs:
+            self.logger.info("Document processing skipped (--no-process-docs flag used)")
+            state.documents_processed = True
+            return state
+        
         try:
             # Validate file structure
             file_discovery = FileDiscovery()
@@ -120,7 +127,7 @@ class ReviewWorkflow:
             # Process solicitation if available
             if self.solicitation_dir and self.solicitation_dir.exists():
                 ingester = SolicitationIngester(self.client)
-                solicitation_data = ingester.ingest_solicitation(self.solicitation_dir, Path("solicitation_md"))
+                solicitation_data = ingester.ingest_solicitation(self.solicitation_dir, Path("output"))
                 state.criteria = solicitation_data.get("criteria_data", {})
                 state.solicitation_md = solicitation_data.get("solicitation_md", "")
             else:
@@ -138,23 +145,21 @@ class ReviewWorkflow:
         return state
     
     def _create_agent_node(self, agent_id: str):
-        """Create a node function for a specific agent."""
+        """Create a node for a specific agent."""
         
         async def agent_node(state: ReviewState) -> ReviewState:
-            """Agent review node."""
-            self.logger.info(f"Running {agent_id} review")
+            """Agent node that performs review."""
             
             # Check if documents were processed successfully
-            if not state.documents_processed or state.processing_error:
-                error_msg = state.processing_error or "Documents not processed"
-                setattr(state, f"{agent_id}_output", {
-                    "agent_name": agent_id,
-                    "feedback": f"Error: {error_msg}",
-                    "scores": {},
-                    "action_items": [],
-                    "confidence": 0.0
-                })
+            if not state.documents_processed:
+                self.logger.error("Documents not processed, skipping agent review")
                 return state
+            
+            if state.processing_error:
+                self.logger.error(f"Document processing failed: {state.processing_error}")
+                return state
+            
+            self.logger.info(f"Running {agent_id} review")
             
             try:
                 agent = self.agents[agent_id]
@@ -165,19 +170,21 @@ class ReviewWorkflow:
                     state.solicitation_md
                 )
                 
-                # Store output in state
-                setattr(state, f"{agent_id}_output", output.dict())
+                # Store output in state using dictionary
+                state.agent_outputs[agent_id] = output.dict()
+                state.completed_agents.append(agent_id)
                 self.logger.info(f"{agent_id} review completed")
                 
             except Exception as e:
                 self.logger.error(f"{agent_id} review failed: {e}")
-                setattr(state, f"{agent_id}_output", {
+                state.agent_outputs[agent_id] = {
                     "agent_name": agent_id,
                     "feedback": f"Error in {agent_id} review: {str(e)}",
                     "scores": {},
                     "action_items": [],
                     "confidence": 0.0
-                })
+                }
+                state.completed_agents.append(agent_id)
             
             return state
         
@@ -187,17 +194,12 @@ class ReviewWorkflow:
         """Join node that waits for all agents to complete."""
         self.logger.info("Checking if all agents have completed...")
         
-        completed_agents = []
-        for agent_id in self.agent_config:
-            if hasattr(state, f"{agent_id}_output") and getattr(state, f"{agent_id}_output") is not None:
-                completed_agents.append(agent_id)
+        self.logger.info(f"Completed agents: {state.completed_agents}")
         
-        self.logger.info(f"Completed agents: {completed_agents}")
-        
-        if len(completed_agents) == len(self.agent_config):
+        if len(state.completed_agents) == len(self.agent_config):
             self.logger.info("All agents completed, proceeding to aggregation")
         else:
-            self.logger.info(f"Waiting for {len(self.agent_config) - len(completed_agents)} more agents...")
+            self.logger.info(f"Waiting for {len(self.agent_config) - len(state.completed_agents)} more agents...")
         
         return state
     
@@ -208,7 +210,7 @@ class ReviewWorkflow:
         # Collect all agent outputs
         agent_outputs = []
         for agent_id in self.agent_config:
-            output = getattr(state, f"{agent_id}_output", None)
+            output = state.agent_outputs.get(agent_id, None)
             if output:
                 agent_outputs.append(output)
         

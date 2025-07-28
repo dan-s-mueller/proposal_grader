@@ -17,86 +17,79 @@ class SolicitationIngester:
         self.client = openai_client
         self.logger = logging.getLogger(__name__)
     
-    def extract_criteria_from_solicitation(self, solicitation_texts: List[Dict[str, Any]], 
-                                         technical_description: str, 
-                                         faq_guidance: str) -> Dict[str, Any]:
-        """
-        Extract evaluation criteria from solicitation documents using LLM.
-        """
-        self.logger.info("Extracting evaluation criteria from solicitation documents")
+    def extract_criteria_from_solicitation(self, solicitation_documents: List[Dict[str, Any]], 
+                                        technical_description: str, faq_guidance: str) -> Dict[str, Any]:
+        """Extract evaluation criteria from solicitation documents using LLM."""
         
-        # Combine all solicitation text
-        combined_text = ""
-        for doc in solicitation_texts:
-            combined_text += f"\n\n--- {doc['file_name']} ---\n{doc['content']}"
+        # Load LLM configuration
+        from ..utils.config_loader import ConfigLoader
+        config_loader = ConfigLoader()
+        llm_config = config_loader.get_llm_config("solicitation_processing")
         
-        # Create prompt for criteria extraction
-        system_prompt = """You are an expert at analyzing government solicitations and extracting evaluation criteria.
-
-Your task is to analyze the provided solicitation documents and extract:
-1. Evaluation criteria and their descriptions
-2. Scoring rubrics and requirements
-3. Technical requirements and constraints
-4. Business/commercial requirements
-
-Return a structured JSON with the following format:
-{
-    "evaluation_criteria": [
-        {
-            "criterion": "string",
-            "description": "string", 
-            "weight": float,
-            "scoring_levels": {
-                "unsatisfactory": "string",
-                "marginal": "string", 
-                "satisfactory": "string",
-                "superior": "string"
-            }
-        }
-    ],
-    "technical_requirements": ["string"],
-    "business_requirements": ["string"],
-    "constraints": ["string"]
-}"""
-
-        user_prompt = f"""Analyze the following solicitation documents and extract evaluation criteria:
-
-TECHNICAL DESCRIPTION:
-{technical_description}
-
-FAQ GUIDANCE:
-{faq_guidance}
-
-SOLICITATION DOCUMENTS:
-{combined_text}
-
-Extract all evaluation criteria, scoring rubrics, and requirements. Be comprehensive and precise."""
-
+        # Combine all solicitation content
+        all_content = []
+        for doc in solicitation_documents:
+            all_content.append(f"Document: {doc['file_name']}\n{doc['content']}\n")
+        
+        combined_content = "\n".join(all_content)
+        
+        prompt = f"""
+        Extract evaluation criteria from the following solicitation documents.
+        
+        Solicitation Documents:
+        {combined_content}
+        
+        Technical Description:
+        {technical_description}
+        
+        FAQ Guidance:
+        {faq_guidance}
+        
+        Please extract and structure the evaluation criteria in JSON format with the following structure:
+        {{
+            "evaluation_criteria": [
+                {{
+                    "criterion": "Criterion name",
+                    "description": "Detailed description",
+                    "weight": "High/Medium/Low",
+                    "max_score": 4.0
+                }}
+            ],
+            "scoring_guidance": "General guidance on scoring",
+            "technical_requirements": ["requirement1", "requirement2"],
+            "business_requirements": ["requirement1", "requirement2"]
+        }}
+        
+        Focus on:
+        1. Technical evaluation criteria
+        2. Business/commercial evaluation criteria
+        3. Innovation and feasibility criteria
+        4. Team qualifications and experience
+        5. Commercialization potential
+        """
+        
+        response = self.client.chat.completions.create(
+            model=llm_config["model"],
+            messages=[
+                {"role": "system", "content": "You are an expert at analyzing SBIR/STTR solicitations and extracting evaluation criteria."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=llm_config["temperature"]
+        )
+        
         try:
-            response = self.client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.1
-            )
-            
-            # Parse the response
-            content = response.choices[0].message.content
-            criteria_data = json.loads(content)
-            
-            self.logger.info(f"Extracted {len(criteria_data.get('evaluation_criteria', []))} evaluation criteria")
+            # Try to parse JSON response
+            criteria_text = response.choices[0].message.content
+            criteria_data = json.loads(criteria_text)
             return criteria_data
-            
-        except Exception as e:
-            self.logger.error(f"Failed to extract criteria: {e}")
-            # Return a basic structure if extraction fails
+        except json.JSONDecodeError:
+            # Fallback to structured text if JSON parsing fails
+            self.logger.warning("Failed to parse JSON response, using fallback structure")
             return {
                 "evaluation_criteria": [],
+                "scoring_guidance": criteria_text,
                 "technical_requirements": [],
-                "business_requirements": [],
-                "constraints": []
+                "business_requirements": []
             }
     
     def create_solicitation_markdown(self, solicitation_texts: List[Dict[str, Any]], 

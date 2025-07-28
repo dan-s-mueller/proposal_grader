@@ -30,11 +30,124 @@ class DocumentProcessor:
         self.logger.info(f"Processing main proposal: {proposal_path}")
         
         if proposal_path.suffix.lower() == '.docx':
-            return self._process_docx_proposal(proposal_path)
+            result = self._process_docx_proposal(proposal_path)
         elif proposal_path.suffix.lower() == '.pdf':
-            return self._process_pdf_proposal(proposal_path)
+            result = self._process_pdf_proposal(proposal_path)
         else:
             raise ValueError(f"Unsupported proposal format: {proposal_path.suffix}")
+        
+        # Save processed document
+        self._save_processed_document(proposal_path, result, "proposal")
+        
+        return result
+    
+    def _save_processed_document(self, original_path: Path, processed_data: Dict[str, Any], doc_type: str):
+        """Save processed document to processed/ subfolder."""
+        try:
+            # Create processed directory
+            if doc_type == "proposal":
+                processed_dir = original_path.parent / "processed"
+            else:  # solicitation
+                processed_dir = original_path.parent / "processed"
+            
+            processed_dir.mkdir(exist_ok=True)
+            
+            # Create filename for processed document
+            base_name = original_path.stem
+            processed_path = processed_dir / f"{base_name}_processed.json"
+            
+            # Save as JSON with metadata
+            processed_doc = {
+                "original_file": str(original_path),
+                "processed_at": str(Path.cwd()),
+                "format": processed_data.get("format", "unknown"),
+                "content": processed_data,
+                "file_size_bytes": original_path.stat().st_size if original_path.exists() else 0
+            }
+            
+            import json
+            with open(processed_path, "w", encoding="utf-8") as f:
+                json.dump(processed_doc, f, indent=2, ensure_ascii=False)
+            
+            self.logger.info(f"Saved processed document to: {processed_path}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to save processed document: {e}")
+    
+    def _save_processed_supporting_docs(self, supporting_docs: List[Dict[str, Any]], supporting_dir: Path):
+        """Save processed supporting documents."""
+        try:
+            processed_dir = supporting_dir / "processed"
+            processed_dir.mkdir(exist_ok=True)
+            
+            # Save summary of all supporting docs
+            summary_path = processed_dir / "supporting_docs_summary.json"
+            
+            summary = {
+                "processed_at": str(Path.cwd()),
+                "total_documents": len(supporting_docs),
+                "document_types": {},
+                "documents": []
+            }
+            
+            for doc in supporting_docs:
+                doc_format = doc.get("format", "unknown")
+                if doc_format not in summary["document_types"]:
+                    summary["document_types"][doc_format] = 0
+                summary["document_types"][doc_format] += 1
+                
+                summary["documents"].append({
+                    "file_name": doc["file_name"],
+                    "file_path": doc["file_path"],
+                    "format": doc_format,
+                    "content_length": len(doc.get("content", ""))
+                })
+            
+            import json
+            with open(summary_path, "w", encoding="utf-8") as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            
+            self.logger.info(f"Saved supporting docs summary to: {summary_path}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to save supporting docs summary: {e}")
+    
+    def _save_processed_solicitation_docs(self, solicitation_data: Dict[str, Any], solicitation_dir: Path):
+        """Save processed solicitation documents."""
+        try:
+            processed_dir = solicitation_dir / "processed"
+            processed_dir.mkdir(exist_ok=True)
+            
+            # Save summary of all solicitation docs
+            summary_path = processed_dir / "solicitation_docs_summary.json"
+            
+            summary = {
+                "processed_at": str(Path.cwd()),
+                "total_documents": len(solicitation_data.get("solicitation_documents", [])),
+                "document_types": {
+                    "csv": len(solicitation_data.get("csv_documents", [])),
+                    "md": len(solicitation_data.get("md_documents", [])),
+                    "pdf": len(solicitation_data.get("pdf_documents", []))
+                },
+                "documents": []
+            }
+            
+            for doc in solicitation_data.get("solicitation_documents", []):
+                summary["documents"].append({
+                    "file_name": doc["file_name"],
+                    "file_path": doc["file_path"],
+                    "type": doc["type"],
+                    "content_length": len(doc.get("content", ""))
+                })
+            
+            import json
+            with open(summary_path, "w", encoding="utf-8") as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            
+            self.logger.info(f"Saved solicitation docs summary to: {summary_path}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to save solicitation docs summary: {e}")
     
     def _process_docx_proposal(self, docx_path: Path) -> Dict[str, Any]:
         """Process DOCX proposal with heading structure."""
@@ -145,6 +258,9 @@ class DocumentProcessor:
                 self.logger.error(f"Failed to process {file_path}: {e}")
                 continue
         
+        # Save processed supporting documents
+        self._save_processed_supporting_docs(supporting_docs, supporting_dir)
+        
         return supporting_docs
     
     def _process_pdf_document(self, pdf_path: Path) -> str:
@@ -239,6 +355,9 @@ class DocumentProcessor:
         
         # Combine all solicitation documents
         all_solicitation_docs = csv_docs + md_docs + pdf_docs
+        
+        # Save processed solicitation documents
+        self._save_processed_solicitation_docs({"solicitation_documents": all_solicitation_docs, "csv_documents": csv_docs, "md_documents": md_docs, "pdf_documents": pdf_docs}, solicitation_dir)
         
         return {
             "solicitation_documents": all_solicitation_docs,

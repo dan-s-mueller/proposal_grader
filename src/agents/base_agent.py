@@ -75,19 +75,30 @@ class BaseAgent:
         
         return config
     
-    @traceable
     async def review(self, proposal_text: str, supporting_docs: List[Dict[str, Any]], 
                     criteria: Dict[str, Any], solicitation_md: str) -> AgentOutput:
-        """
-        Perform review based on agent template.
-        """
-        self.logger.info(f"Starting {self.agent_id} review")
+        """Perform the review using the agent's template and LLM."""
         
-        # Create agent-specific prompt
+        # Load LLM configuration
+        from ..utils.config_loader import ConfigLoader
+        config_loader = ConfigLoader()
+        llm_config = config_loader.get_llm_config("agent_reviews")
+        
+        # Prepare the prompt
         prompt = self._create_agent_prompt(proposal_text, supporting_docs, criteria, solicitation_md)
         
-        # Get LLM response
-        feedback = self._call_llm(prompt)
+        # Make the LLM call
+        response = await self.client.chat.completions.acreate(
+            model=llm_config["model"],
+            messages=[
+                {"role": "system", "content": self.template},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=llm_config["temperature"]
+        )
+        
+        # Extract the response
+        feedback = response.choices[0].message.content
         
         # Extract scores
         scores = self._extract_scores_from_feedback(feedback)
@@ -157,25 +168,6 @@ class BaseAgent:
 Provide a comprehensive review based on your role focus. Be specific, actionable, and cite evidence from the documents."""
 
         return prompt
-    
-    def _call_llm(self, prompt: str) -> str:
-        """
-        Make a call to the OpenAI API with LangSmith tracing.
-        """
-        messages = [
-            {"role": "user", "content": prompt}
-        ]
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                messages=messages,
-                temperature=0.1
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            self.logger.error(f"LLM call failed: {e}")
-            return f"Error in {self.agent_id} review: {str(e)}"
     
     def _extract_scores_from_feedback(self, feedback: str) -> Dict[str, float]:
         """
