@@ -1,175 +1,360 @@
-# Proposal Development User’s Manual (Detailed)
 
-This manual provides complete, step‑by‑step guidance—from brainstorm to final SBIR package—and highlights **every** task that requires manual input or reviewer action. Whenever you adjust tasks or the Excel workbook, rerun the scripts to keep budget and scores aligned.
+# Proposal Development User's Manual
 
----
-
-## 1. Prepare Your Brain Dump
-
-1. **Gather your notes.** Compile all notes, ideas, journal entries and rough thoughts about the proposal topic. Set aside at least five minutes to capture whatever comes to mind without editing or organising.
-2. **Perform a general dump.** Write down any words, phrases or sentences that occur to you about your proposal. Don’t worry about spelling or order.
-3. **Highlight key themes.** Circle or highlight phrases that seem central to your project. For each highlighted term, perform a detail dump to explore related ideas.
-4. **Group similar ideas.** After your general and detail dumps, group related concepts together and note any missing components.
-5. **Generate outline.** Run:
-   ```bash
-   python scripts/run_brain_dump.py --idea idea.txt
-   ```
-   This creates `outline.md` organised into logical sections (introduction, objectives, methodology, team, commercialisation) and flags gaps.
+Goal: ingest solicitation docs, review one main proposal doc plus supporting PDFs with independent LLM "agents," return actionable feedback and 1.0–4.0 scores (0.5 steps).
 
 ---
 
-## 2. Ingest the Solicitation and Set Evaluation Criteria
+## 0. Prerequisites
 
-1. **Obtain the solicitation.** Download the funding opportunity PDF.
-2. **Extract criteria.**
-   ```bash
-   python -m core.loader --ingest-solicitation solicitation.pdf
-   ```
-   This outputs `criteria.json` listing evaluation bullets (e.g. innovation, technical merit, team qualifications, commercial potential).
-3. **Customise prompts.**
-   ```bash
-   python -m core.reviewers customise_role_prompts --criteria criteria.json
-   ```
-   This tailors the detail reviewer and panel questions so they map directly to the solicitation.
+| Item | Why | How |
+|------|-----|-----|
+| Poetry | Dependency and script runner | `curl -sSL https://install.python-poetry.org | python3 -` |
+| Python 3.11+ | Runtime | Use pyenv or system package manager |
+| OpenAI key | LLM access | `export OPENAI_API_KEY=...` |
 
----
-
-## 3. Assign T‑Shirt Sizes and Estimate Budget
-
-1. **List tasks.** Break down your project into discrete tasks (one‑person chunks).
-2. **Assign sizes.** For each task choose XS (4 h), S (8 h), M (24 h), L (56 h), XL (120 h). Agree on what each size means and keep the mapping in the Hours Mapping table.
-3. **Define mapping.** Adjust hours if your team differs.
-4. **Estimate costs.**
-   ```bash
-   python -m core.budget_engine push sheets/Task_Estimation.xlsx \
-          --hourly-rate 150 --overhead 0.30 --buffer 0.15
-   ```
-   The script applies overhead (indirect) and buffer (schedule slack).
-5. **Review and adjust.** If `TOTAL_COST` in Excel exceeds the Phase I cap, reduce task sizes or scope.
+Project layout (baseline):
+```
+project_root/
+  documents/proposal/main_proposal.docx (or .pdf)
+  documents/proposal/supporting_docs/
+  documents/solicitation/
+  output/
+  src/agents/templates/
+  pyproject.toml
+```
 
 ---
 
-## 4. Draft the Proposal and Run the Multi‑Role Review
+## 1. Required Inputs (start here)
 
-1. **Prepare draft.** Align each section with evaluation criteria. Export to `draft_v1.pdf`.
-2. **Select roles.**
-   - Technical reviewer
-   - Business strategist
-   - Detail reviewer
-   - Panel reviewer
-   - Storytelling reviewer (optional)
-3. **Run review.**
-   ```bash
-   python scripts/run_iterative_review.py \
-          --proposal draft_v1.pdf \
-          --criteria criteria.json \
-          --xls sheets/Task_Estimation.xlsx \
-          --roles technical,business,detail,panel,storytelling
-   ```
-   **Outputs**
-   - `feedback/<role>.md` – role comments
-   - `scorecard.json` – ratings (High = 3, Medium = 2, Low = 1)
-   - Updated Excel tabs (**Actual Hours**, **Burn‑down**)
-4. **Interpret feedback.** Address criteria with Low ratings first.
-5. **Iterate.** Revise the draft or budget and rerun until targets are met.
+### 1.1 Main documents
+| File | Required? | Notes |
+|------|-----------|-------|
+| `documents/proposal/main_proposal.docx` or `.pdf` | Yes | DOCX preferred for heading parsing. PDF supported as fallback. |
+| `documents/proposal/supporting_docs/*.pdf` or `*.docx` | As needed | Letters of support, contractor quotes, resumes, prior work references. Supports sub-folders. |
+| `documents/solicitation/*.pdf`, `*.csv`, `*.md` | Yes | Main solicitation, Q&A addenda, FAQs, evaluation criteria. Supports sub-folders. |
 
----
+### 1.2 Supported File Formats
 
-## 5. Manage Reviewer Actions
+**Proposal Documents:**
+- **Main Proposal**: DOCX (preferred) or PDF
+- **Supporting Documents**: PDF or DOCX
 
-### Reviewer Checklist
+**Solicitation Documents:**
+- **PDF**: Main solicitation documents, Q&A addenda
+- **CSV**: Evaluation criteria, scoring rubrics, structured data
+- **MD**: Technical descriptions, FAQs, guidance documents
 
-| Role         | Responsibilities                                               |
-| ------------ | -------------------------------------------------------------- |
-| Technical    | Confirm feasibility, correct equations, realistic TRL progress |
-| Business     | Validate market size, pricing, IP strategy, ROI timeline       |
-| Detail       | Cross‑check every solicitation bullet, formatting, page limits |
-| Panel        | Score each criterion H/M/L, justify ratings                    |
-| Storytelling | Ensure clear narrative (problem → solution → benefit)          |
+**Folder Organization:**
+- All document types support sub-folder organization
+- Files are discovered recursively in all sub-directories
+- Maintains original folder structure in processing
 
-### Proposal Owner Checklist
+### 1.3 Agent set (personas + LLM roles)
 
-- Provide reviewers with **solicitation PDF**, latest draft and criteria.
-- Collect markdown feedback files.
-- Consolidate comments into an action list and update draft.
-- Track version history, score improvements and budget deltas.
+| Agent ID | Person | Focus | Hates | Output form |
+|----------|--------|-------|-------|-------------|
+| tech_lead | Eric Roulo | Feasibility, trades, elegance | Hand wavy physics, hidden assumptions | Bulleted risks, missing equations, unclear interfaces |
+| business_strategist | Gerardo | Market, ROI, partners | Vague TAM, weak pricing | One page gap list (market story, pricing table, IP plan) |
+| detail_checker | Assign | Solicitation checklist, format | Missing bullets, bad acronyms | Table: Criterion → Found? → Where → Fix |
+| panel_scorer | Assign | Scores per criterion | Off criterion text | Table or JSON: Criterion → Score → ≤75 word why |
+| storyteller | Assign (optional) | Narrative flow, clarity | Jargon walls | Marked up markdown with rewrite suggestions |
+
+(Agent templates are stored in `src/agents/templates/` and can be customized.)
 
 ---
 
-## 6. Iteration Targets
+## 2. Snapshot the solicitation
 
-- Weighted score ≥ 2.3.
-- Total cost ≤ \$150 000.
-- Reserve ≥ 15 % (shown in Burn‑down chart).
-- All criteria Medium or better.
+```bash
+poetry run ingest-solicitation
+```
 
----
+Defaults:
+- Reads all PDF, CSV, and MD files in `documents/solicitation/` (including sub-folders)
+- Writes to `output/`:
+  - `criteria.json` (evaluation bullets)
+  - `solicitation.md` (Markdown snapshot)
 
-## 7. Export Final Package
-
-1. Generate SBIR budget form:
-   ```bash
-   python scripts/export_sbir_form.py --xls sheets/Task_Estimation.xlsx --out budget_form.xlsx
-   ```
-2. Finalise `proposal_final.pdf`.
-3. Collect letters of support and any certifications.
-4. Upload to Valid Eval.
+Review and trim if necessary. Keep exact criterion wording.
 
 ---
 
-## 8. Troubleshooting
+## 3. Prepare proposal and support docs
 
-| Issue             | Likely Cause                       | Fix                             |
-| ----------------- | ---------------------------------- | ------------------------------- |
-| Named range error | Range missing in Excel             | Excel → Formulas → Name Manager |
-| LLM quota error   | Missing key or exhausted quota     | Check `OPENAI_API_KEY`, billing |
-| PDF extract empty | Encrypted PDF                      | `qpdf --decrypt file.pdf`       |
-| Budget over cap   | Too many L/XL tasks, high overhead | Adjust scope or rates           |
+1. Confirm `documents/proposal/main_proposal.docx` uses proper headings (H1, H2) for best results. PDF is supported but DOCX preferred.
+2. Place all supporting PDFs and DOCXs in `documents/proposal/supporting_docs/` (supports sub-folders).
+3. The system automatically processes all documents and runs concurrent reviews.
 
 ---
 
-## 9. Spreadsheet Behaviour and Fixed Variables
+## 4. Run the asynchronous multi agent review
 
-- **Auto‑calculation.** Scripts write values to named ranges. Excel recalculates pivot tables and formulas when the workbook is opened or when you press **Data ▷ Refresh All**.
-- **Immutable ranges.** Any cell/range whose name begins with `` is treated as read‑only by scripts. Place overhead %, fringe %, G&A etc. there and adjust manually.
+### 4.1 Default run (all agents)
+```bash
+poetry run review
+```
+Uses:
+- `documents/proposal/main_proposal.docx` (or .pdf)
+- `documents/proposal/supporting_docs/` (PDF and DOCX)
+- `output/criteria.json`
+- Agents: tech_lead,business_strategist,detail_checker,panel_scorer,storyteller
+- Output folder: `output/`
+
+### 4.2 Custom agent configuration
+```bash
+poetry run review --agents tech_lead,business_strategist,panel_scorer
+```
+
+### 4.3 Override defaults (optional)
+```bash
+poetry run review   --proposal-dir documents/proposal   --supporting-dir documents/proposal/supporting_docs   --solicitation-dir documents/solicitation   --agents tech_lead,business_strategist
+```
+
+### 4.4 List available agents
+```bash
+poetry run list-agents
+```
+
+### 4.5 Visualize workflow structure
+```bash
+poetry run visualize-workflow
+```
+
+What happens:
+- Documents are processed (DOCX with heading structure, PDFs to markdown, CSV to text).
+- Each agent gets a tailored prompt from its template.
+- Agents run concurrently using LangGraph workflow.
+- Files are written as each agent finishes.
+
+---
+
+## 5. Outputs
+
+All outputs are saved to the `output/` folder:
+
+| File | Purpose |
+|------|---------|
+| `output/feedback/{agent_id}.md` | Agent-specific feedback and scores |
+| `output/scorecard.json` | Consolidated scores and criteria mapping |
+| `output/summary.md` | Executive summary with key findings |
+| `output/action_items.md` | Prioritized action items for improvement |
+| `output/criteria.json` | Extracted evaluation criteria from solicitation |
+| `output/solicitation.md` | Solicitation markdown snapshot |
+| `output/workflow.png` | Workflow visualization diagram |
 
 ---
 
-## 10. Monitoring the Workflow
+## 6. File Format Support
 
-- **CLI banners.** Every major step prints a banner (`[budget_engine]`, `[reviewers]`, `[scorer]`).
-- **Verbose mode.** Add `-v` to any script for raw JSON payloads, list of updated ranges and full LLM responses.
-- **Run log.** Each iteration writes `runs/<timestamp>.log` capturing Excel writes, OpenAI calls, scores and budget deltas.
+### 6.1 Proposal Documents
+
+**Main Proposal:**
+- **DOCX** (preferred): Full heading structure preserved, best for analysis
+- **PDF**: Converted to text, basic structure maintained
+
+**Supporting Documents:**
+- **PDF**: Converted to markdown text
+- **DOCX**: Extracted as plain text with paragraph structure
+
+### 6.2 Solicitation Documents
+
+**PDF Files:**
+- Main solicitation documents
+- Q&A addenda
+- Technical specifications
+- Converted to markdown for processing
+
+**CSV Files:**
+- Evaluation criteria tables
+- Scoring rubrics
+- Structured data
+- Converted to readable text format
+
+**MD Files:**
+- Technical descriptions
+- FAQs and guidance
+- Pre-formatted markdown content
+- Used directly as-is
+
+### 6.3 Folder Organization
+
+The system supports flexible folder organization:
+
+```
+documents/
+├── proposal/
+│   ├── main_proposal.docx
+│   └── supporting_docs/
+│       ├── letters/
+│       │   ├── support_letter_1.pdf
+│       │   └── support_letter_2.docx
+│       ├── resumes/
+│       │   └── team_bios.pdf
+│       └── technical/
+│           └── technical_details.pdf
+└── solicitation/
+    ├── main_solicitation.pdf
+    ├── criteria/
+    │   ├── evaluation_criteria.csv
+    │   └── scoring_rubric.csv
+    ├── guidance/
+    │   ├── technical_description.md
+    │   └── faq.md
+    └── addenda/
+        └── qa_addendum.pdf
+```
+
+All files are discovered recursively and processed appropriately based on their format.
 
 ---
 
-## 11. Package Assembly (Attachments, Letters, Quotes)
+## 7. Troubleshooting
 
-1. Place supplemental docs in ``:
-   - `assets/budget_form.xlsx` – generated budget sheet
-   - `assets/letters/…` – PDFs of letters of support
-   - `assets/contracts/…` – contractor quotes or subaward budgets
-2. Create a manifest:
-   ```bash
-   python scripts/export_sbir_form.py --xls sheets/Task_Estimation.xlsx \
-          --out assets/budget_form.xlsx --manifest assets/manifest.json
-   ```
-3. Package submission:
-   ```bash
-   python scripts/package_submission.py --manifest assets/manifest.json
-   ```
-   Outputs `submission.zip` ready for Valid Eval.
+### 7.1 File Discovery Issues
+
+**Problem**: "Main proposal not found"
+**Solution**: 
+- Ensure main proposal is named `main_proposal.docx` or `main_proposal.pdf`
+- Check file is in `documents/proposal/` directory
+- Verify file extension is correct
+
+**Problem**: "No supporting documents found"
+**Solution**:
+- Check files are in `documents/proposal/supporting_docs/`
+- Ensure files are PDF or DOCX format
+- Verify files are not corrupted
+
+**Problem**: "No solicitation documents found"
+**Solution**:
+- Check files are in `documents/solicitation/`
+- Ensure files are PDF, CSV, or MD format
+- Verify files are not corrupted
+
+### 7.2 Processing Issues
+
+**Problem**: "Failed to process PDF"
+**Solution**:
+- Check PDF is not password protected
+- Verify PDF is not corrupted
+- Try converting to DOCX if possible
+
+**Problem**: "Failed to process CSV"
+**Solution**:
+- Check CSV encoding (should be UTF-8)
+- Verify CSV has proper headers
+- Ensure CSV is not corrupted
+
+**Problem**: "Failed to process DOCX"
+**Solution**:
+- Check DOCX is not password protected
+- Verify DOCX is not corrupted
+- Try saving as DOCX format (not DOC)
 
 ---
 
-## 12. Optional Add‑Ons to Consider
+## 8. Advanced Configuration
 
-| Gap                             | Action                                                                          |
-| ------------------------------- | ------------------------------------------------------------------------------- |
-| Risk & Mitigation matrix        | Add `risks.csv`; detail reviewer verifies each risk has mitigation and TRL path |
-| Schedule Gantt                  | Auto‑generate PNG from task dates and embed in draft                            |
-| ITAR / non‑US disclosure        | Detail reviewer checklist item                                                  |
-| Data management plan            | Storytelling reviewer ensures appendix exists                                   |
-| Compliance forms (SF‑LLL, etc.) | Store in `assets/forms/` and include in manifest                                |
+### 8.1 Custom File Patterns
+
+The system uses these patterns to find files:
+
+**Main Proposal:**
+- `main_proposal.docx` (preferred)
+- `*proposal*.docx`
+- `*main*.docx`
+- `main_proposal.pdf`
+- `*proposal*.pdf`
+- `*main*.pdf`
+
+**Supporting Documents:**
+- `*.pdf` (any PDF file)
+- `*.docx` (any DOCX file)
+
+**Solicitation Documents:**
+- `*.pdf` (any PDF file)
+- `*.csv` (any CSV file)
+- `*.md` (any markdown file)
+
+### 8.2 Sub-folder Support
+
+All document types support sub-folder organization:
+
+- Files are discovered recursively using `rglob()`
+- Original folder structure is preserved in processing
+- No depth limit on sub-folders
+- Maintains file paths in output for reference
 
 ---
+
+## 9. Performance Considerations
+
+### 9.1 File Size Limits
+
+- **PDF**: No artificial limits, natural LLM limits apply
+- **DOCX**: No artificial limits, natural LLM limits apply
+- **CSV**: No artificial limits, natural LLM limits apply
+- **MD**: No artificial limits, natural LLM limits apply
+
+### 9.2 Processing Speed
+
+- **PDF**: Slower due to conversion process
+- **DOCX**: Fastest processing
+- **CSV**: Very fast processing
+- **MD**: Instant processing
+
+### 9.3 Memory Usage
+
+- Large PDFs may use significant memory during conversion
+- Consider splitting very large documents if needed
+- System will encounter natural LLM limits rather than artificial truncation
+
+---
+
+## 10. Agent Templates
+
+Agent behavior is defined by templates in `src/agents/templates/`:
+
+### Template Structure
+Each agent template contains:
+- **Agent Identity**: Name, role, focus, hates
+- **Expertise Areas**: Key areas of expertise
+- **Critical Focus Areas**: What to be critical of
+- **Output Format**: How to structure feedback
+- **Scoring Criteria**: How to score (1.0-4.0 scale)
+- **Review Style**: Tone and approach
+
+### Customizing Agents
+To modify agent behavior:
+1. Edit the template file in `src/agents/templates/<agent_id>.md`
+2. Restart the review process
+3. The new template will be used automatically
+
+### Adding New Agents
+1. Create new template file: `src/agents/templates/new_agent.md`
+2. Follow the template structure above
+3. Use the agent: `poetry run review --agents new_agent`
+
+---
+
+## 11. System Architecture
+
+The new system uses:
+- **LangGraph**: Concurrent workflow orchestration
+- **OpenAI**: Direct API calls with LangSmith tracing
+- **Agent Templates**: Configurable agent behavior
+- **python-docx**: Word document processing with heading structure
+- **marker-pdf**: PDF to markdown conversion
+- **csv**: CSV to text conversion
+- **Pydantic**: Type-safe state management
+
+Key improvements:
+- Template-based agent configuration
+- Concurrent agent execution
+- Better error handling and recovery
+- Structured output formats
+- Modular agent system for easy extension
+- LangSmith integration for observability
+- Multi-format document support
+- Sub-folder organization support

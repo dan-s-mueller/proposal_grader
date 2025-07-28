@@ -4,20 +4,29 @@ version = "0.1.0"
 description = "AI-powered system for automated evaluation of SBIR/STTR proposals"
 authors = ["Dan Mueller <dsm@danmueller.pro>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "3.11.12"
 openai = "*"
 python-dotenv = "*"
-pypdf2 = "^3.0.1"
-langsmith = "^0.4.5"
-langchain = "^0.3.26"
-langchain-openai = "^0.3.27"
-pydantic = "^2.11.7"
+langgraph = "*"
+langsmith = "*"
+python-docx = "*"
 marker-pdf = "^1.8.2"
+pydantic = "^2.11.7"
+graphviz = "*"
+pydot = "*"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
+
+[tool.poetry.scripts]
+ingest-solicitation = "src.cli:main"
+review = "src.cli:main"
+list-agents = "src.cli:main"
+visualize-workflow = "src.cli:main"
+show-config = "src.cli:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

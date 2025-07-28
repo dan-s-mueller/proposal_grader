@@ -1,91 +1,312 @@
-# NASA SBIR Ignite Proposal Grading Pipeline
+# Multi-Agent Proposal Review System
 
-## Overview
-This system automates the grading of NASA SBIR Ignite proposals using a rubric defined in JSON files. It checks for required proposal documents, evaluates proposal content using AI, and outputs a CSV summary with scores and recommendations on a 1–4 scale (unsatisfactory, marginal, satisfactory, superior).
+A modern, concurrent AI-powered system for evaluating SBIR/STTR proposals using multiple specialized agent personas with template-driven behavior.
 
-## How it Works
-- **Rubric and File Config Loading**: Loads the evaluation rubric and required/optional file configuration from JSON files.
-- **File Detection**: Recursively searches the proposal directory for all required and optional files, using flexible filename patterns. Only truly required files cause errors if missing.
-- **Proposal Text Extraction**: Extracts and aggregates text from all required PDF proposal files. (Other file types are currently ignored.)
-- **LLM Grading**: For each rubric sub-category, the system constructs a prompt (rubric + proposal text) and uses OpenAI to evaluate and assign a 1–4 score, with rationale.
-- **CSV Output**: Writes a CSV summary (`output/evaluation_summary.csv`) with detailed scores, weights, and recommendations. No Markdown output is produced.
+## 🚀 Key Features
 
-## LLM Integration & Structured Output
-- The pipeline uses **LangChain** and **OpenAI** to call the LLM for each rubric sub-category.
-- A **Pydantic model** (`RubricScore`) defines the expected structure of the LLM's response (score, evidence, reasoning, improvements).
-- **LangChain's `PydanticOutputParser`** is used to generate format instructions for the LLM and to validate/parse the LLM's output into a Python object.
-- The prompt sent to the LLM includes both the rubric instructions and the full proposal text, ensuring the model has all necessary context for evaluation.
-- This approach enforces robust, structured, and reliable grading, minimizing formatting errors and making downstream processing easy.
+- **Template-Based Agents**: Configurable agent behavior via markdown templates
+- **Concurrent Multi-Agent Review**: Specialized AI agents run simultaneously
+- **LangGraph Workflow**: Robust orchestration with built-in error handling
+- **Word Document Support**: Native DOCX processing with heading structure
+- **LangSmith Integration**: Full observability and tracing
+- **Modular Architecture**: Easy to add new agent types
+- **Structured Outputs**: Agent-specific feedback + consolidated scores
 
-## File & Directory Structure
+## 🏗️ Architecture
+
 ```
-project_root/
-├── main.py
-├── csv_rubric_parser.py
-├── config/
-│   └── proposal_files.json
+src/
+├── agents/                   # Agent system
+│   ├── templates/           # Agent behavior templates
+│   │   ├── tech_lead.md
+│   │   ├── business_strategist.md
+│   │   ├── detail_checker.md
+│   │   ├── panel_scorer.md
+│   │   └── storyteller.md
+│   ├── base_agent.py       # Generic agent class
+│   └── agent_factory.py    # Agent creation and management
+├── core/                    # Document processing
+│   ├── document_processor.py
+│   ├── file_discovery.py
+│   └── solicitation_ingester.py
+├── workflow/                # LangGraph orchestration
+│   ├── review_graph.py
+│   └── state_models.py
+├── utils/                   # Output formatting
+│   └── output_formatters.py
+└── cli.py                   # Command interface
+```
+
+## 🎯 Agent System
+
+| Agent ID | Persona | Focus | Output |
+|----------|---------|-------|--------|
+| **tech_lead** | Eric Roulo | Technical feasibility, elegance | Technical risks, missing equations |
+| **business_strategist** | Gerardo | Market, ROI, partnerships | Market gaps, pricing analysis |
+| **detail_checker** | Compliance | Solicitation checklist | Criterion → Found? → Where → Fix |
+| **panel_scorer** | Scoring | Criterion-based scoring | JSON: Criterion → Score → Justification |
+| **storyteller** | Narrative | Flow, clarity | Markdown with rewrite suggestions |
+
+## 📁 File Structure
+
+```
+proposal_grader/
 ├── documents/
-│   ├── solicitations/
-│   │   ├── eval_criteria_description.csv
-│   │   └── eval_rubric.csv
-│   └── proposal/
-│       └── [your proposal files and folders]
-├── rubrics/
-│   ├── phase1_technical.json
-│   └── phase1_commercial.json
-├── prompts/
-│   └── [auto-generated prompt templates]
-├── output/
-│   └── evaluation_summary.csv
-├── pyproject.toml
-└── ...
+│   ├── proposal/
+│   │   ├── main_proposal.docx    # Main proposal (Word preferred, PDF supported)
+│   │   └── supporting_docs/      # Supporting PDFs and DOCXs (supports sub-folders)
+│   └── solicitation/             # Solicitation PDFs, CSVs, and MDs (supports sub-folders)
+├── output/                       # All outputs
+│   ├── feedback/
+│   │   ├── tech_lead.md
+│   │   ├── business_strategist.md
+│   │   └── ...
+│   ├── scorecard.json
+│   ├── summary.md
+│   ├── action_items.md
+│   ├── criteria.json
+│   ├── solicitation.md
+│   └── workflow.png
+├── src/agents/templates/         # Agent behavior templates
+└── src/                         # Source code
 ```
 
-## How to Run
-1. **Install dependencies** (with Poetry):
-   ```sh
-   poetry install
-   ```
-2. **Set your OpenAI API key** in a `.env` file:
-   ```env
-   OPENAI_API_KEY=your_openai_key_here
-   ```
-3. **Run the pipeline:**
-   ```sh
-   poetry run python main.py
-   ```
-   - By default, this will parse the rubric, grade the proposal in `documents/proposal/`, and write results to `output/evaluation_summary.csv`.
+## 🚀 Quick Start
 
-## Scoring & Aggregation
-- **Each sub-category** is scored 1–4 (1=unsatisfactory, 2=marginal, 3=satisfactory, 4=superior).
-- **Category weights** are split equally among sub-categories.
-- **Section weights**: Technical = 70%, Commercial = 30% (configurable).
-- **Overall score**: Weighted average on the 1–4 scale.
-- **Recommendation**:
-  - 1.0–1.9: unsatisfactory
-  - 2.0–2.9: marginal
-  - 3.0–3.4: satisfactory
-  - 3.5–4.0: superior
+### 1. Setup Environment
 
-## Configuring Required/Optional Files
-- Edit `config/proposal_files.json` to specify required and optional files.
-- Use wildcards (e.g., `*technical*.pdf`) to allow flexible naming.
-- The system searches all subfolders in the proposal directory.
+```bash
+# Install dependencies
+poetry install
 
-## Environment Variables
-- `OPENAI_API_KEY` (required): Your OpenAI API key.
-- Optional: `OPENAI_MODEL`, `OPENAI_TEMPERATURE`, `OPENAI_MAX_TOKENS` (see `.env` for details).
+# Set OpenAI API key
+export OPENAI_API_KEY="your-api-key"
+```
 
-## Output CSV
-- Located at `output/evaluation_summary.csv`.
-- Columns:
-  - section, category, sub_category, score, weight, weighted_score, rationale
-  - Section totals and overall score/recommendation are included at the end.
+### 2. Prepare Documents
 
-## Notes
-- All proposal files can be organized in subfolders; the system will find them.
-- Only the 1–4 scale is used for scoring and reporting.
-- The pipeline is fully automated and robust to file naming variations.
+```bash
+# Create directory structure
+mkdir -p documents/proposal/supporting_docs
+mkdir -p documents/solicitation
 
----
-For questions or issues, see the code or contact the maintainer. 
+# Add your documents:
+# - documents/proposal/main_proposal.docx (main proposal - DOCX preferred, PDF supported)
+# - documents/proposal/supporting_docs/*.pdf or *.docx (supporting docs - supports sub-folders)
+# - documents/solicitation/*.pdf, *.csv, *.md (solicitation docs - supports sub-folders)
+```
+
+### 3. Ingest Solicitation
+
+```bash
+# Extract evaluation criteria from solicitation
+poetry run ingest-solicitation
+```
+
+### 4. Run Review
+
+```bash
+# Run with all agents (default)
+poetry run review
+
+# Run with specific agents
+poetry run review --agents tech_lead,business_strategist,panel_scorer
+
+# List available agents
+poetry run list-agents
+
+# Visualize workflow structure
+poetry run visualize-workflow
+```
+
+## 📄 Supported File Formats
+
+### Proposal Documents
+- **Main Proposal**: DOCX (preferred for heading structure) or PDF
+- **Supporting Documents**: PDF or DOCX
+
+### Solicitation Documents  
+- **PDF**: Main solicitation documents, Q&A addenda, technical specifications
+- **CSV**: Evaluation criteria tables, scoring rubrics, structured data
+- **MD**: Technical descriptions, FAQs, guidance documents
+
+### Folder Organization
+- All document types support sub-folder organization
+- Files are discovered recursively in all sub-directories
+- No depth limit on sub-folders
+- Maintains original folder structure in processing
+
+## 📊 Outputs
+
+All outputs are saved to the `output/` folder:
+
+### Agent-Specific Feedback
+- `output/feedback/tech_lead.md` - Technical feasibility review
+- `output/feedback/business_strategist.md` - Business strategy review
+- `output/feedback/detail_checker.md` - Compliance checklist
+- `output/feedback/panel_scorer.md` - Criterion scores
+- `output/feedback/storyteller.md` - Narrative feedback
+
+### Consolidated Results
+- `output/scorecard.json` - All scores (1.0-4.0 scale)
+- `output/summary.md` - Executive summary
+- `output/action_items.md` - Prioritized action items
+
+### Solicitation Processing
+- `output/criteria.json` - Extracted evaluation criteria
+- `output/solicitation.md` - Solicitation markdown
+
+### Workflow Visualization
+- `output/workflow.png` - Workflow diagram
+
+## 🔧 Configuration
+
+### Environment Variables
+```bash
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_MODEL="gpt-4o"  # Optional, defaults to gpt-4o
+```
+
+### Agent Configuration
+```bash
+# Run with specific agents
+poetry run review --agents tech_lead,business_strategist
+
+# Custom paths and agents
+poetry run review \
+  --proposal-dir custom/proposal \
+  --agents tech_lead,panel_scorer \
+  --output-dir custom/output
+```
+
+## 🎨 Agent Templates
+
+Agent behavior is defined by templates in `src/agents/templates/`:
+
+### Template Structure
+Each agent template contains:
+- **Agent Identity**: Name, role, focus, hates
+- **Expertise Areas**: Key areas of expertise
+- **Critical Focus Areas**: What to be critical of
+- **Output Format**: How to structure feedback
+- **Scoring Criteria**: How to score (1.0-4.0 scale)
+- **Review Style**: Tone and approach
+
+### Customizing Agents
+To modify agent behavior:
+1. Edit the template file in `src/agents/templates/<agent_id>.md`
+2. Restart the review process
+3. The new template will be used automatically
+
+### Adding New Agents
+1. Create new template file: `src/agents/templates/new_agent.md`
+2. Follow the template structure above
+3. Use the agent: `poetry run review --agents new_agent`
+
+## 🧪 Testing
+
+Run the system test:
+```bash
+python test_system.py
+```
+
+## 📊 Workflow Visualization
+
+Generate visual diagrams of the LangGraph workflow:
+
+```bash
+# Visualize default workflow
+poetry run visualize-workflow
+
+# Visualize with specific agents
+poetry run visualize-workflow --agents tech_lead,business_strategist
+
+# Custom output directory
+poetry run visualize-workflow --output-dir workflow_diagrams
+```
+
+This generates:
+- `workflow.png` - PNG diagram of the workflow
+- `workflow.svg` - SVG diagram (better quality)
+
+The visualization shows:
+- Document processing as the initial step
+- Agent nodes and their connections
+- Concurrent execution paths
+- Data flow through the system
+- State transitions
+
+## 🔄 Iterative Workflow
+
+1. **Prepare**: Add proposal and supporting documents
+2. **Ingest**: Extract criteria from solicitation
+3. **Review**: Run multi-agent review
+4. **Analyze**: Check scores and action items
+5. **Iterate**: Edit proposal based on feedback
+6. **Repeat**: Re-run review until scores improve
+
+## 🛠️ Development
+
+### Adding New Agents
+
+1. Create new template file in `src/agents/templates/`
+2. Follow the template structure
+3. Use the agent via CLI: `poetry run review --agents new_agent`
+
+### Custom Scoring
+
+Modify the scoring criteria in agent templates or override `extract_scores_from_feedback()` in `BaseAgent`.
+
+## 📈 Performance
+
+- **Concurrent Execution**: All agents run simultaneously
+- **Template-Driven**: Agent behavior defined in markdown files
+- **Error Recovery**: LangGraph handles agent failures gracefully
+- **LangSmith Tracing**: Full observability of agent interactions
+
+## 🔍 Monitoring
+
+The system provides:
+- Real-time progress indicators
+- Agent completion status
+- LangSmith tracing and observability
+- Error messages with context
+- Performance metrics
+
+## 🎯 Scoring Scale
+
+| Score | Meaning |
+|-------|---------|
+| 4.0 | Outstanding, no significant weaknesses |
+| 3.5 | Very strong, minor issues |
+| 3.0 | Strong, some moderate issues |
+| 2.5 | Adequate, several issues limit impact |
+| 2.0 | Weak, major gaps |
+| 1.5 | Very weak |
+| 1.0 | Not responsive or fails criterion |
+
+## 📝 Migration from Legacy System
+
+The new system replaces the old single-role rubric-based system:
+
+- **Old**: Sequential processing with LangChain
+- **New**: Concurrent processing with LangGraph
+- **Old**: Hard-coded role classes
+- **New**: Template-driven agent system
+- **Old**: CSV output only
+- **New**: Markdown + JSON outputs
+- **Old**: PDF-only processing
+- **New**: DOCX + PDF processing
+- **Old**: No observability
+- **New**: LangSmith integration
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Add tests for new functionality
+4. Submit pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details. 

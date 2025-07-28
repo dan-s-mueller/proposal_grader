@@ -1,0 +1,28 @@
+{
+  "llm": {
+    "agent_reviews": {
+      "model": "gpt-4o",
+      "temperature": 0.1
+    },
+    "solicitation_processing": {
+      "model": "gpt-3.5-turbo",
+      "temperature": 0.0
+    },
+    "default": {
+      "model": "gpt-4o",
+      "temperature": 0.1
+    }
+  },
+  "output": {
+    "save_individual_agent_outputs": true,
+    "save_consolidated_summary": true,
+    "save_action_items": true
+  },
+  "default_agents": [
+    "tech_lead",
+    "business_strategist", 
+    "detail_checker",
+    "panel_scorer",
+    "storyteller"
+  ]
+} 
