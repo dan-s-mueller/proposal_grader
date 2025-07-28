@@ -55,11 +55,9 @@ proposal_grader/
 │   ├── proposal/
 │   │   ├── main_proposal.docx    # Main proposal (Word preferred, PDF supported)
 │   │   ├── processed/            # Cached processed documents
-│   │   │   └── {filename}_processed.json
 │   │   └── supporting_docs/      # Supporting PDFs and DOCXs (supports sub-folders)
-│   │       └── processed/        # Supporting docs summary
 │   └── solicitation/             # Solicitation PDFs, CSVs, and MDs (supports sub-folders)
-│       └── processed/            # Solicitation docs summary
+│       ├── processed/            # Cached processed documents
 ├── output/                       # All outputs
 │   ├── feedback/
 │   │   ├── tech_lead.md

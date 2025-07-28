@@ -4,8 +4,7 @@ version = "0.1.0"
 description = "AI-powered system for automated evaluation of SBIR/STTR proposals"
 authors = ["Dan Mueller <dsm@danmueller.pro>"]
 readme = "README.md"
-package-mode = false
-packages = []
+packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = "3.11.12"
@@ -23,11 +22,10 @@ pydot = "*"
 ipykernel = "^6.29.5"
 
 [tool.poetry.scripts]
-ingest-solicitation = "src.cli:main"
-review = "src.cli:main"
-list-agents = "src.cli:main"
-visualize-workflow = "src.cli:main"
-show-config = "src.cli:main"
+review = "src.cli:run_review"
+list-agents = "src.cli:run_list_agents"
+show-config = "src.cli:run_show_config"
+visualize-workflow = "src.cli:run_visualize_workflow"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

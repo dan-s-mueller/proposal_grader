@@ -202,10 +202,10 @@ When documents are processed, they are automatically saved to `processed/` subfo
 
 **Proposal Documents:**
 - `documents/proposal/processed/{filename}_processed.json` - Processed main proposal
-- `documents/proposal/supporting_docs/processed/supporting_docs_summary.json` - Supporting docs summary
+- `documents/proposal/processed/supporting_{filename}_processed.json` - Individual supporting documents
 
 **Solicitation Documents:**
-- `documents/solicitation/processed/solicitation_docs_summary.json` - Solicitation docs summary
+- `documents/solicitation/processed/solicitation_{filename}_processed.json` - Individual solicitation documents
 
 These processed documents contain:
 - Original file metadata
@@ -214,7 +214,31 @@ These processed documents contain:
 - File format information
 - Content statistics
 
-You can use `--no-process-docs` to skip document processing and use cached processed documents for faster subsequent runs.
+**Caching Behavior:**
+- The system automatically checks for existing processed documents
+- If a processed document exists, it will be used instead of reprocessing
+- New documents are processed and cached automatically
+- Use `--no-process-docs` to skip all document processing entirely
+
+**File Structure Example:**
+```
+documents/
+├── proposal/
+│   ├── main_proposal.docx
+│   ├── processed/
+│   │   ├── main_proposal_processed.json
+│   │   ├── supporting_technical_specs_processed.json
+│   │   └── supporting_budget_processed.json
+│   └── supporting_docs/
+│       ├── technical_specs.pdf
+│       └── budget.xlsx
+└── solicitation/
+    ├── eval_criteria.csv
+    ├── processed/
+    │   ├── solicitation_eval_criteria_processed.json
+    │   └── solicitation_faq_processed.json
+    └── faq.md
+```
 
 ---
 

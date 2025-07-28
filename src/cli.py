@@ -211,8 +211,82 @@ async def show_config_command(args):
         sys.exit(1)
 
 
+def run_review():
+    """Wrapper function for poetry run review."""
+    import asyncio
+    import sys
+    
+    # Create a mock args object with review command
+    class MockArgs:
+        def __init__(self):
+            self.command = "review"
+            self.proposal_dir = "documents/proposal"
+            self.supporting_dir = "documents/proposal/supporting_docs"
+            self.solicitation_dir = "documents/solicitation"
+            self.agents = None
+            self.process_docs = True
+    
+    args = MockArgs()
+    asyncio.run(run_review_command(args))
+
+def run_list_agents():
+    """Wrapper function for poetry run list-agents."""
+    import asyncio
+    import sys
+    
+    class MockArgs:
+        def __init__(self):
+            self.command = "list-agents"
+    
+    args = MockArgs()
+    asyncio.run(list_agents_command(args))
+
+def run_show_config():
+    """Wrapper function for poetry run show-config."""
+    import asyncio
+    import sys
+    
+    class MockArgs:
+        def __init__(self):
+            self.command = "show-config"
+    
+    args = MockArgs()
+    asyncio.run(show_config_command(args))
+
+def run_visualize_workflow():
+    """Wrapper function for poetry run visualize-workflow."""
+    import asyncio
+    import sys
+    
+    class MockArgs:
+        def __init__(self):
+            self.command = "visualize-workflow"
+            self.agents = None
+    
+    args = MockArgs()
+    asyncio.run(visualize_workflow_command(args))
+
 def main():
     """Main CLI entry point."""
+    # Get the script name to determine which command to run
+    script_name = sys.argv[0].split('/')[-1] if '/' in sys.argv[0] else sys.argv[0]
+    
+    # Map script names to commands
+    script_to_command = {
+        'review': 'review',
+        'list-agents': 'list-agents', 
+        'show-config': 'show-config',
+        'visualize-workflow': 'visualize-workflow',
+        'ingest-solicitation': 'ingest-solicitation'
+    }
+    
+    # If we're running as a script, set the command
+    if script_name in script_to_command:
+        command = script_to_command[script_name]
+        # Insert the command as the first argument
+        sys.argv.insert(1, command)
+    
+    # Parse arguments
     parser = argparse.ArgumentParser(description="Multi-Agent Proposal Review System")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
@@ -251,26 +325,19 @@ def main():
     
     args = parser.parse_args()
     
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
-    
-    # Setup logging
-    setup_logging()
-    
-    # Run command
-    if args.command == "ingest-solicitation":
-        asyncio.run(ingest_solicitation_command(args))
-    elif args.command == "review":
+    # Run the appropriate command
+    if args.command == "review":
         asyncio.run(run_review_command(args))
     elif args.command == "list-agents":
-        asyncio.run(list_agents_command(args))
+        list_agents_command(args)
+    elif args.command == "show-config":
+        show_config_command(args)
     elif args.command == "visualize-workflow":
         asyncio.run(visualize_workflow_command(args))
-    elif args.command == "show-config":
-        asyncio.run(show_config_command(args))
+    elif args.command == "ingest-solicitation":
+        ingest_solicitation_command(args)
     else:
-        print(f"Unknown command: {args.command}")
+        parser.print_help()
         sys.exit(1)
 
 
