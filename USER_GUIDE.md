@@ -16,7 +16,7 @@ Goal: ingest solicitation docs, review one main proposal doc plus supporting PDF
 Project layout (baseline):
 ```
 project_root/
-  documents/proposal/main_proposal.docx (or .pdf)
+  documents/proposal/main_proposal.pdf
   documents/proposal/supporting_docs/
   documents/solicitation/
   output/
@@ -31,15 +31,16 @@ project_root/
 ### 1.1 Main documents
 | File | Required? | Notes |
 |------|-----------|-------|
-| `documents/proposal/main_proposal.docx` or `.pdf` | Yes | DOCX preferred for heading parsing. PDF supported as fallback. |
-| `documents/proposal/supporting_docs/*.pdf` or `*.docx` | As needed | Letters of support, contractor quotes, resumes, prior work references. Supports sub-folders. |
+| `documents/proposal/main_proposal.pdf` | Yes | PDF only - converted to markdown with OCR and LLM enhancement |
+| `documents/proposal/supporting_docs/*.pdf`, `*.csv`, `*.md` | As needed | Letters of support, contractor quotes, resumes, prior work references. Supports sub-folders. |
 | `documents/solicitation/*.pdf`, `*.csv`, `*.md` | Yes | Main solicitation, Q&A addenda, FAQs, evaluation criteria. Supports sub-folders. |
+| `documents/solicitation/criteria.json` | Yes | Static evaluation criteria file (required) |
 
 ### 1.2 Supported File Formats
 
 **Proposal Documents:**
-- **Main Proposal**: DOCX (preferred) or PDF
-- **Supporting Documents**: PDF or DOCX
+- **Main Proposal**: PDF only
+- **Supporting Documents**: PDF, CSV, MD
 
 **Solicitation Documents:**
 - **PDF**: Main solicitation documents, Q&A addenda
@@ -65,19 +66,39 @@ project_root/
 
 ---
 
-## 2. Snapshot the solicitation
+## 2. Prepare the criteria.json file
 
-```bash
-poetry run ingest-solicitation
+Create a `criteria.json` file in `documents/solicitation/` with your evaluation criteria:
+
+```json
+{
+  "evaluation_criteria": {
+    "technical_merit": {
+      "innovation": {
+        "description": "Degree of innovation and technical advancement",
+        "weight": 25
+      },
+      "feasibility": {
+        "description": "Technical feasibility and approach",
+        "weight": 25
+      }
+    },
+    "commercial_potential": {
+      "market_need": {
+        "description": "Market need and commercial potential",
+        "weight": 25
+      },
+      "team": {
+        "description": "Team qualifications and experience",
+        "weight": 25
+      }
+    }
+  },
+  "scoring_guidance": "Score each criterion from 1.0 to 4.0 with 0.5 increments"
+}
 ```
 
-Defaults:
-- Reads all PDF, CSV, and MD files in `documents/solicitation/` (including sub-folders)
-- Writes to `output/`:
-  - `criteria.json` (evaluation bullets)
-  - `solicitation.md` (Markdown snapshot)
-
-Review and trim if necessary. Keep exact criterion wording.
+This file will be used by all agents, especially the panel_scorer, for evaluation.
 
 ---
 
@@ -137,9 +158,9 @@ Edit `config/system_config.json` to adjust temperature settings:
 poetry run review
 ```
 Uses:
-- `documents/proposal/main_proposal.docx` (or .pdf)
-- `documents/proposal/supporting_docs/` (PDF and DOCX)
-- `output/criteria.json`
+- `documents/proposal/main_proposal.pdf`
+- `documents/proposal/supporting_docs/` (PDF, CSV, MD)
+- `documents/solicitation/criteria.json`
 - Agents: tech_lead,business_strategist,detail_checker,panel_scorer,storyteller
 - Output folder: `output/`
 - Document processing: Enabled (default)
@@ -166,14 +187,15 @@ poetry run list-agents
 
 ### 5.6 Visualize workflow structure
 ```bash
-poetry run visualize-workflow
+poetry run visualize
 ```
 
 What happens:
-- Documents are processed (DOCX with heading structure, PDFs to markdown, CSV to text).
+- Documents are processed (PDFs with OCR and LLM enhancement, CSV to text, MD enhanced).
 - Each agent gets a tailored prompt from its template.
 - Agents run concurrently using LangGraph workflow.
 - Files are written as each agent finishes.
+- All activity is logged to `output/review.log`.
 
 ---
 
@@ -187,8 +209,7 @@ All outputs are saved to the `output/` folder:
 | `output/scorecard.json` | Consolidated scores and criteria mapping |
 | `output/summary.md` | Executive summary with key findings |
 | `output/action_items.md` | Prioritized action items for improvement |
-| `output/criteria.json` | Extracted evaluation criteria from solicitation |
-| `output/solicitation.md` | Solicitation markdown snapshot |
+| `output/review.log` | Persistent logging of all CLI commands and processing |
 | `output/workflow.png` | Workflow visualization diagram |
 
 ### 6.1 Processed Document Storage
@@ -219,16 +240,16 @@ These processed documents contain:
 ```
 documents/
 ├── proposal/
-│   ├── main_proposal.docx
+│   ├── main_proposal.pdf
 │   ├── processed/
 │   │   ├── main_proposal_processed.json
 │   │   ├── supporting_technical_specs_processed.json
 │   │   └── supporting_budget_processed.json
 │   └── supporting_docs/
 │       ├── technical_specs.pdf
-│       └── budget.xlsx
+│       └── budget.csv
 └── solicitation/
-    ├── eval_criteria.csv
+    ├── criteria.json
     ├── processed/
     │   ├── solicitation_eval_criteria_processed.json
     │   └── solicitation_faq_processed.json
@@ -242,13 +263,11 @@ documents/
 ### 7.1 Proposal Documents
 
 **Main Proposal:**
-- **DOCX** (preferred): Converted to markdown with LLM enhancement
-- **PDF**: Converted to markdown with OCR and LLM enhancement
+- **PDF only**: Converted to markdown with OCR and LLM enhancement
 
 **Supporting Documents:**
 - **PDF**: Converted to markdown with OCR and LLM enhancement
-- **DOCX**: Converted to markdown with LLM enhancement
-- **TXT**: Converted to markdown with LLM enhancement
+- **CSV**: Converted to readable text format with LLM enhancement
 - **MD**: Converted to markdown with LLM enhancement
 
 ### 7.2 Solicitation Documents
@@ -291,27 +310,30 @@ documents/
 - Preserves text layout and formatting
 - Supports multiple languages
 
-### 7.3 Folder Organization
+**Error Handling:**
+- Clear exception messages when processing fails
+- No fallback content - errors are raised directly
+- Comprehensive logging for debugging
+
+### 7.4 Folder Organization
 
 The system supports flexible folder organization:
 
 ```
 documents/
 ├── proposal/
-│   ├── main_proposal.docx
+│   ├── main_proposal.pdf
 │   └── supporting_docs/
 │       ├── letters/
 │       │   ├── support_letter_1.pdf
-│       │   └── support_letter_2.docx
+│       │   └── support_letter_2.pdf
 │       ├── resumes/
 │       │   └── team_bios.pdf
 │       └── technical/
 │           └── technical_details.pdf
 └── solicitation/
     ├── main_solicitation.pdf
-    ├── criteria/
-    │   ├── evaluation_criteria.csv
-    │   └── scoring_rubric.csv
+    ├── criteria.json
     ├── guidance/
     │   ├── technical_description.md
     │   └── faq.md
@@ -329,14 +351,14 @@ All files are discovered recursively and processed appropriately based on their 
 
 **Problem**: "Main proposal not found"
 **Solution**: 
-- Ensure main proposal is named `main_proposal.docx` or `main_proposal.pdf`
+- Ensure main proposal is named `main_proposal.pdf`
 - Check file is in `documents/proposal/` directory
 - Verify file extension is correct
 
 **Problem**: "No supporting documents found"
 **Solution**:
 - Check files are in `documents/proposal/supporting_docs/`
-- Ensure files are PDF or DOCX format
+- Ensure files are PDF, CSV, or MD format
 - Verify files are not corrupted
 
 **Problem**: "No solicitation documents found"
@@ -344,6 +366,12 @@ All files are discovered recursively and processed appropriately based on their 
 - Check files are in `documents/solicitation/`
 - Ensure files are PDF, CSV, or MD format
 - Verify files are not corrupted
+
+**Problem**: "criteria.json not found"
+**Solution**:
+- Ensure `criteria.json` is in `documents/solicitation/` directory
+- Verify the JSON file is properly formatted
+- Check file permissions
 
 ### 8.2 Processing Issues
 
@@ -359,31 +387,70 @@ All files are discovered recursively and processed appropriately based on their 
 - Verify CSV has proper headers
 - Ensure CSV is not corrupted
 
-**Problem**: "Failed to process DOCX"
+**Problem**: "Failed to process PDF"
 **Solution**:
-- Check DOCX is not password protected
-- Verify DOCX is not corrupted
-- Try saving as DOCX format (not DOC)
+- Check PDF is not password protected
+- Verify PDF is not corrupted
+- Ensure PDF contains readable text or images for OCR
 
 ---
 
-## 9. Advanced Configuration
+## 9. Logging and Debugging
+
+### 9.1 Log File Location
+
+All system activity is automatically logged to `output/review.log`:
+
+- **CLI Commands**: Every command execution with timestamps
+- **Document Processing**: File discovery, processing status, and errors
+- **Agent Execution**: Agent creation, execution progress, and completion
+- **Workflow Status**: Workflow initialization, execution, and completion
+- **Error Messages**: Detailed error information for debugging
+
+### 9.2 Log File Format
+
+```
+2024-01-15 10:30:45,123 [INFO] cli: CLI command executed: poetry run review
+2024-01-15 10:30:45,124 [INFO] cli: Starting multi-agent proposal review
+2024-01-15 10:30:45,125 [INFO] document_processor: Processing main proposal: main_proposal.pdf
+2024-01-15 10:30:46,234 [INFO] review_graph: Agent tech_lead completed successfully
+```
+
+### 9.3 Debugging with Logs
+
+When troubleshooting issues:
+
+1. **Check the log file first**: `cat output/review.log`
+2. **Look for error messages**: Search for `[ERROR]` entries
+3. **Trace execution flow**: Follow the timestamps to understand the sequence
+4. **Identify bottlenecks**: Look for long gaps between timestamps
+
+### 9.4 Log File Management
+
+- Logs are automatically appended to the existing file
+- No automatic log rotation (manual cleanup may be needed for long-term use)
+- Log file location: `output/review.log`
+
+---
+
+## 10. Advanced Configuration
 
 ### 9.1 Custom File Patterns
 
 The system uses these patterns to find files:
 
 **Main Proposal:**
-- `main_proposal.docx` (preferred)
-- `*proposal*.docx`
-- `*main*.docx`
-- `main_proposal.pdf`
+- `main_proposal.pdf` (required)
 - `*proposal*.pdf`
 - `*main*.pdf`
 
 **Supporting Documents:**
 - `*.pdf` (any PDF file)
-- `*.docx` (any DOCX file)
+- `*.csv` (any CSV file)
+- `*.md` (any Markdown file)
 
 **Solicitation Documents:**
-- `
+- `*.pdf` (any PDF file)
+- `*.csv` (any CSV file)
+- `*.md` (any Markdown file)
+- `criteria.json` (required evaluation criteria)

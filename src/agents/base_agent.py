@@ -11,6 +11,9 @@ from pydantic import BaseModel
 from openai import OpenAI
 import os
 from langsmith import traceable
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain.schema import HumanMessage, SystemMessage
 
 
 class AgentOutput(BaseModel):
@@ -33,6 +36,17 @@ class BaseAgent:
         # Load agent template
         self.template = self._load_template(agent_id)
         self.agent_config = self._parse_template(self.template)
+        
+        # Initialize LangChain LLM
+        from ..utils.config_loader import ConfigLoader
+        config_loader = ConfigLoader()
+        llm_config = config_loader.get_llm_config("agent_reviews")
+        
+        self.llm = ChatOpenAI(
+            model=llm_config["model"],
+            temperature=llm_config["temperature"],
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
     
     def _load_template(self, agent_id: str) -> str:
         """Load agent template from file."""
@@ -79,26 +93,22 @@ class BaseAgent:
                criteria: Dict[str, Any], solicitation_md: str) -> AgentOutput:
         """Perform the review using the agent's template and LLM."""
         
-        # Load LLM configuration
-        from ..utils.config_loader import ConfigLoader
-        config_loader = ConfigLoader()
-        llm_config = config_loader.get_llm_config("agent_reviews")
+        # Create LangChain prompt template
+        system_template = self.template
+        human_template = self._create_agent_prompt(proposal_text, supporting_docs, criteria, solicitation_md)
         
-        # Prepare the prompt
-        prompt = self._create_agent_prompt(proposal_text, supporting_docs, criteria, solicitation_md)
+        # Create prompt template
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_template),
+            ("human", human_template)
+        ])
         
-        # Make the LLM call
-        response = self.client.chat.completions.create(
-            model=llm_config["model"],
-            messages=[
-                {"role": "system", "content": self.template},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=llm_config["temperature"]
-        )
+        # Format the prompt
+        formatted_prompt = prompt.format_messages()
         
-        # Extract the response
-        feedback = response.choices[0].message.content
+        # Make the LLM call using LangChain
+        response = self.llm.invoke(formatted_prompt)
+        feedback = response.content
         
         # Extract scores
         scores = self._extract_scores_from_feedback(feedback)

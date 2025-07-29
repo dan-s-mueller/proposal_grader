@@ -7,10 +7,11 @@ A modern, concurrent AI-powered system for evaluating SBIR/STTR proposals using 
 - **Template-Based Agents**: Configurable agent behavior via markdown templates
 - **Concurrent Multi-Agent Review**: Specialized AI agents run simultaneously
 - **LangGraph Workflow**: Robust orchestration with built-in error handling
-- **Word Document Support**: Native DOCX processing with heading structure
-- **LangSmith Integration**: Full observability and tracing
+- **PDF Document Support**: Native PDF processing with OCR and LLM enhancement
+- **Comprehensive Logging**: Persistent logging to `output/review.log` for debugging
 - **Modular Architecture**: Easy to add new agent types
 - **Structured Outputs**: Agent-specific feedback + consolidated scores
+- **Exception-Based Error Handling**: Clear error messages instead of fallback content
 
 ## 🏗️ Architecture
 
@@ -52,12 +53,12 @@ src/
 proposal_grader/
 ├── documents/
 │   ├── proposal/
-│   │   ├── main_proposal.pdf    # Main proposal (PDF)
+│   │   ├── main_proposal.pdf    # Main proposal (PDF only)
 │   │   ├── processed/            # Cached processed documents
 │   │   └── supporting_docs/      # Supporting PDFs, CSVs, and MDs (supports sub-folders)
 │   └── solicitation/             # Solicitation documents
 │       ├── NASA+2025+SBIR+Ignite+Solicitation.pdf  # Main solicitation PDF
-│       ├── criteria.json         # Static evaluation criteria
+│       ├── criteria.json         # Static evaluation criteria (required)
 │       ├── supporting_docs/      # Supporting solicitation docs (PDF, CSV, MD)
 │       └── processed/            # Cached processed documents
 ├── output/                       # All outputs
@@ -68,7 +69,7 @@ proposal_grader/
 │   ├── scorecard.json
 │   ├── summary.md
 │   ├── action_items.md
-│   ├── solicitation.md
+│   ├── review.log               # Persistent logging
 │   └── workflow.png
 ├── src/agents/templates/         # Agent behavior templates
 └── src/                         # Source code
@@ -94,10 +95,10 @@ mkdir -p documents/proposal/supporting_docs
 mkdir -p documents/solicitation/supporting_docs
 
 # Add your documents:
-# - documents/proposal/main_proposal.pdf (main proposal - PDF)
+# - documents/proposal/main_proposal.pdf (main proposal - PDF only)
 # - documents/proposal/supporting_docs/*.pdf, *.csv, *.md (supporting docs - supports sub-folders)
 # - documents/solicitation/NASA+2025+SBIR+Ignite+Solicitation.pdf (main solicitation PDF)
-# - documents/solicitation/criteria.json (static evaluation criteria)
+# - documents/solicitation/criteria.json (static evaluation criteria - required)
 # - documents/solicitation/supporting_docs/*.pdf, *.csv, *.md (supporting solicitation docs)
 ```
 
@@ -116,6 +117,9 @@ poetry run review --no-process-docs
 # List available agents
 poetry run list-agents
 
+# Show system configuration
+poetry run show-config
+
 # Visualize workflow structure
 poetry run visualize
 ```
@@ -123,8 +127,8 @@ poetry run visualize
 ## 📄 Supported File Formats
 
 ### Proposal Documents
-- **Main Proposal**: DOCX (preferred) or PDF - converted to markdown with LLM enhancement
-- **Supporting Documents**: PDF, DOCX, TXT, MD - converted to markdown with LLM enhancement
+- **Main Proposal**: PDF only - converted to markdown with OCR and LLM enhancement
+- **Supporting Documents**: PDF, CSV, MD - converted to markdown with LLM enhancement
 
 ### Solicitation Documents  
 - **PDF**: Main solicitation documents, Q&A addenda, technical specifications - converted to markdown with OCR and LLM enhancement
@@ -136,6 +140,7 @@ poetry run visualize
 - **OCR Support**: Automatic OCR for PDF documents with text layout preservation
 - **LLM Enhancement**: Uses GPT-4o for intelligent document analysis and conversion
 - **Consistent Output**: All documents converted to structured markdown format
+- **Exception-Based Error Handling**: Clear error messages when processing fails
 
 ### Folder Organization
 - All document types support sub-folder organization
@@ -159,9 +164,8 @@ All outputs are saved to the `output/` folder:
 - `output/summary.md` - Executive summary
 - `output/action_items.md` - Prioritized action items
 
-### Solicitation Processing
-- `output/criteria.json` - Extracted evaluation criteria
-- `output/solicitation.md` - Solicitation markdown
+### Logging and Debugging
+- `output/review.log` - Persistent logging of all CLI commands and processing
 
 ### Workflow Visualization
 - `output/workflow.png` - Workflow diagram
@@ -173,6 +177,17 @@ All outputs are saved to the `output/` folder:
 export OPENAI_API_KEY="your-api-key"
 export OPENAI_MODEL="gpt-4o"  # Optional, defaults to gpt-4o
 ```
+
+### Logging
+
+All CLI commands automatically log to `output/review.log`:
+- Command execution with timestamps
+- Document processing status
+- Agent execution progress
+- Error messages and debugging information
+- Workflow completion status
+
+The log file is appended to on each run, providing a complete history of all system activity.
 
 ### Agent Configuration
 ```bash
@@ -223,13 +238,13 @@ Generate visual diagrams of the LangGraph workflow:
 
 ```bash
 # Visualize default workflow
-poetry run visualize-workflow
+poetry run visualize
 
 # Visualize with specific agents
-poetry run visualize-workflow --agents tech_lead,business_strategist
+poetry run visualize --agents tech_lead,business_strategist
 
 # Custom output directory
-poetry run visualize-workflow --output-dir workflow_diagrams
+poetry run visualize --output-dir workflow_diagrams
 ```
 
 This generates:
@@ -246,11 +261,10 @@ The visualization shows:
 ## 🔄 Iterative Workflow
 
 1. **Prepare**: Add proposal and supporting documents
-2. **Ingest**: Extract criteria from solicitation
-3. **Review**: Run multi-agent review
-4. **Analyze**: Check scores and action items
-5. **Iterate**: Edit proposal based on feedback
-6. **Repeat**: Re-run review until scores improve
+2. **Review**: Run multi-agent review
+3. **Analyze**: Check scores and action items
+4. **Iterate**: Edit proposal based on feedback
+5. **Repeat**: Re-run review until scores improve
 
 ## 🛠️ Development
 
@@ -276,7 +290,7 @@ Modify the scoring criteria in agent templates or override `extract_scores_from_
 The system provides:
 - Real-time progress indicators
 - Agent completion status
-- LangSmith tracing and observability
+- Comprehensive logging to `output/review.log`
 - Error messages with context
 - Performance metrics
 
@@ -303,9 +317,9 @@ The new system replaces the old single-role rubric-based system:
 - **Old**: CSV output only
 - **New**: Markdown + JSON outputs
 - **Old**: PDF-only processing
-- **New**: DOCX + PDF processing
+- **New**: PDF processing with OCR and LLM enhancement
 - **Old**: No observability
-- **New**: LangSmith integration
+- **New**: Comprehensive logging and error handling
 
 ## 🤝 Contributing
 

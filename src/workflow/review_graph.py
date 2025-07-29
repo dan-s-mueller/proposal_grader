@@ -169,7 +169,7 @@ class ReviewWorkflow:
         """Create a node for a specific agent."""
         
         async def agent_node(state: ReviewState) -> ReviewState:
-            """Agent node that performs review."""
+            """Agent node that performs review with LangChain tracing."""
             
             # Check if documents were processed successfully
             if not state.documents_processed:
