@@ -272,7 +272,7 @@ Provide a comprehensive review based on your role focus. Be specific, actionable
 class PanelScorerAgent(BaseAgent):
     """Specialized agent for panel_scorer: runs async LLM calls per criterion and aggregates results."""
 
-    async def review(self, proposal_text: str, supporting_docs: list, criteria: dict, solicitation_md: str, output_dir: Path = Path('output'), max_concurrent: int = 3):
+    async def review(self, proposal_text: str, supporting_docs: list, criteria: dict, solicitation_md: str, output_dir: Path = Path('output'), max_concurrent: int = 2):
         self.logger.info("[PanelScorerAgent] Starting review. Flattening criteria...")
         self.logger.info(f"[PanelScorerAgent] Top-level criteria keys: {list(criteria.keys())}")
         if "types" in criteria:
@@ -310,10 +310,26 @@ class PanelScorerAgent(BaseAgent):
             supporting_text += f"\n\n--- {doc.get('file_name', 'doc')} ---\n{doc.get('full_text', '')}"
         context = f"## Solicitation Context\n{solicitation_md}\n\n## Main Proposal\n{proposal_text}\n\n## Supporting Documents\n{supporting_text}"
         import re, json, asyncio
+        # Load batching/retry config from system_config.json
+        config_loader = ConfigLoader()
+        scorer_config = config_loader.config.get('llm', {}).get('panel_scorer', {})
+        batch_config = scorer_config.get('batch', {})
+        batch_size = batch_config.get('batch_size', 2)
+        warmup_count = batch_config.get('warmup_count', 4)
+        warmup_delay = batch_config.get('warmup_delay', 3)
+        base_delay = batch_config.get('base_delay', 5)
+        max_retries = batch_config.get('max_retries', 8)
+        self.logger.info(f"[PanelScorerAgent] Batch config: batch_size={batch_size}, warmup_count={warmup_count}, warmup_delay={warmup_delay}, base_delay={base_delay}, max_retries={max_retries}")
         semaphore = asyncio.Semaphore(max_concurrent)
+        def safe_json_loads(s):
+            # Replace single backslashes not followed by valid escape with double backslash
+            s = re.sub(r'(?<!\\)\\(?!["/bfnrtu])', r'\\', s)
+            try:
+                return json.loads(s)
+            except json.JSONDecodeError as e:
+                self.logger.error(f"[PanelScorerAgent] JSON decode error: {e}\nRaw: {s}")
+                raise
         async def score_criterion(criterion):
-            max_retries = 5
-            base_delay = 2
             crit_id = f"{criterion['type']}|{criterion['category']}|{criterion['sub_category']}"
             for attempt in range(max_retries):
                 async with semaphore:
@@ -355,12 +371,11 @@ Return your answer as a JSON object with the following fields:
                         json_match = re.search(r'\{.*\}', feedback, re.DOTALL)
                         if json_match:
                             json_str = json_match.group(0)
-                            score_data = json.loads(json_str)
+                            score_data = safe_json_loads(json_str)
                             if isinstance(score_data, dict) and "score" in score_data:
-                                self.logger.info(f"[PanelScorerAgent] Success for {crit_id}: {score_data}")
+                                self.logger.info(f"[PanelScorerAgent] Success for {crit_id}")
                                 return criterion, score_data, feedback
                     except Exception as e:
-                        # Detect rate limit error by message or type
                         err_str = str(e).lower()
                         if "rate limit" in err_str or "429" in err_str:
                             delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
@@ -374,7 +389,24 @@ Return your answer as a JSON object with the following fields:
                         await asyncio.sleep(delay)
             self.logger.error(f"[PanelScorerAgent] Failed to score {crit_id} after {max_retries} attempts.")
             return criterion, {"score": None, "evidence": "", "reasoning": "Could not parse response", "improvements": ""}, feedback if 'feedback' in locals() else ""
-        results = await asyncio.gather(*(score_criterion(crit) for crit in eval_criteria))
+        # Serial warmup for first N criteria
+        results = []
+        self.logger.info(f"[PanelScorerAgent] Serial warmup for first {warmup_count} criteria...")
+        for crit in eval_criteria[:warmup_count]:
+            self.logger.info(f"[PanelScorerAgent] Warmup scoring: {crit['type']}|{crit['category']}|{crit['sub_category']}")
+            result = await score_criterion(crit)
+            results.append(result)
+            self.logger.info(f"[PanelScorerAgent] Waiting {warmup_delay}s after warmup criterion...")
+            await asyncio.sleep(warmup_delay)
+        # Then process the rest in batches
+        for i in range(warmup_count, len(eval_criteria), batch_size):
+            batch = eval_criteria[i:i+batch_size]
+            self.logger.info(f"[PanelScorerAgent] Processing batch {(i-warmup_count)//batch_size+1} ({len(batch)} criteria)...")
+            batch_results = await asyncio.gather(*(score_criterion(crit) for crit in batch))
+            results.extend(batch_results)
+            if i + batch_size < len(eval_criteria):
+                self.logger.info(f"[PanelScorerAgent] Waiting {base_delay}s before next batch...")
+                await asyncio.sleep(base_delay)
         # Aggregate
         scores_json = {f"{c['type']}|{c['category']}|{c['sub_category']}": data for c, data, _ in results}
         # Build markdown table with weights and total score
