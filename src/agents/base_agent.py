@@ -414,29 +414,36 @@ Return your answer as a JSON object with the following fields:
         table_rows = []
         total_score = 0.0
         total_weight = 0.0
+        improvements = []
         for crit, data, _ in results:
             weight = crit.get('weight', 0.0) or 0.0
             score = data.get('score', 0.0) or 0.0
             if score:
                 total_score += score * weight
             total_weight += weight
+            improvements.append(data.get('improvements', '').strip())
             row = f"| {crit['type']} | {crit['category']} | {crit['sub_category']} | {weight:.2f} | {score} | {data.get('evidence', '').replace('|', ' ')} | {data.get('reasoning', '').replace('|', ' ')} | {data.get('improvements', '').replace('|', ' ')} |"
             table_rows.append(row)
         markdown_table = table_header + "\n" + "\n".join(table_rows)
         # Calculate normalized total score (weighted average)
         normalized_score = total_score / total_weight if total_weight else 0.0
-        summary = f"Weighted Total Score: {normalized_score:.2f} (out of 4.0)\n"
+        # Summarize top recommended actions (improvements)
+        top_actions = [imp for imp in improvements if imp and imp.lower() not in ("no significant improvements needed", "no significant improvements are necessary as the team already demonstrates outstanding qualifications and experience relevant to the nasa subtopic.")]
+        top_actions = list(dict.fromkeys(top_actions))  # Remove duplicates, preserve order
+        top_actions = top_actions[:5]  # Show top 5
+        actions_md = "\n".join([f"- {a}" for a in top_actions]) if top_actions else "No major improvements recommended."
+        summary = f"## Panel Reviewer Composite Score\n\n**Weighted Total Score:** {normalized_score:.2f} (out of 4.0)\n\n## Top Recommended Actions\n\n{actions_md}\n"
         # Save markdown table to file
         output_dir.mkdir(parents=True, exist_ok=True)
         table_path = output_dir / "panel_scorer_results.md"
         with open(table_path, "w", encoding="utf-8") as f:
-            f.write(f"# Panel Scorer Results\n\n{markdown_table}\n\n{summary}")
+            f.write(f"# Panel Scorer Results\n\n{summary}\n\n{markdown_table}\n\n<details><summary>Raw JSON</summary>\n\n```json\n{json.dumps(scores_json, indent=2)}\n```\n</details>\n\nMarkdown table saved to: {table_path}")
         # Compose feedback: summary + markdown table + raw JSON
         feedback = f"### Panel Scorer Results\n\n{summary}\n{markdown_table}\n\n<details><summary>Raw JSON</summary>\n\n```json\n{json.dumps(scores_json, indent=2)}\n```\n</details>\n\nMarkdown table saved to: {table_path}"
         return AgentOutput(
             agent_name=self.agent_id,
             feedback=feedback,
-            scores={f"{c['type']}|{c['category']}|{c['sub_category']}": d.get("score", None) for c, d, _ in results},
-            action_items=[],
+            scores={"panel_scorer_composite": normalized_score},
+            action_items=top_actions,
             confidence=0.9
         ) 
