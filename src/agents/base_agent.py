@@ -5,15 +5,17 @@ Generic agent class that loads templates and can be configured for different rol
 import logging
 import re
 import json
+import asyncio
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
-import os
-from langsmith import traceable
 from langchain_openai import ChatOpenAI
-# from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
+
+from ..utils.config_loader import ConfigLoader
+import random
 
 
 class AgentOutput(BaseModel):
@@ -38,7 +40,6 @@ class BaseAgent:
         self.agent_config = self._parse_template(self.template)
         
         # Initialize LangChain LLM
-        from ..utils.config_loader import ConfigLoader
         config_loader = ConfigLoader()
         llm_config = config_loader.get_llm_config("agent_reviews")
         
@@ -98,7 +99,6 @@ class BaseAgent:
         human_content = self._create_agent_prompt(proposal_text, supporting_docs, criteria, solicitation_md)
         
         # Create messages directly to avoid format string issues
-        # from langchain.schema import SystemMessage, HumanMessage
         messages = [
             SystemMessage(content=system_content),
             HumanMessage(content=human_content)
@@ -267,3 +267,144 @@ Provide a comprehensive review based on your role focus. Be specific, actionable
                     action_items.append(cleaned)
         
         return action_items 
+
+
+class PanelScorerAgent(BaseAgent):
+    """Specialized agent for panel_scorer: runs async LLM calls per criterion and aggregates results."""
+
+    async def review(self, proposal_text: str, supporting_docs: list, criteria: dict, solicitation_md: str, output_dir: Path = Path('output'), max_concurrent: int = 3):
+        self.logger.info("[PanelScorerAgent] Starting review. Flattening criteria...")
+        self.logger.info(f"[PanelScorerAgent] Top-level criteria keys: {list(criteria.keys())}")
+        if "types" in criteria:
+            criteria = criteria["types"]
+        config_loader = ConfigLoader()
+        llm_config = config_loader.get_llm_config("panel_scorer")
+        llm = ChatOpenAI(
+            model=llm_config["model"],
+            temperature=llm_config["temperature"],
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
+        def flatten_criteria(criteria):
+            flat = []
+            for crit_type, type_data in criteria.items():
+                if crit_type == "metadata":
+                    continue
+                type_weight = type_data.get("weight", None)
+                for category, cat_data in type_data.get("categories", {}).items():
+                    cat_weight = cat_data.get("weight", None)
+                    for subcat, subcat_data in cat_data.get("sub_categories", {}).items():
+                        flat.append({
+                            "type": crit_type,
+                            "category": category,
+                            "sub_category": subcat,
+                            "description": subcat_data.get("description", ""),
+                            "scoring": subcat_data.get("scoring", {}),
+                            "weight": subcat_data.get("weight", cat_weight if cat_weight is not None else type_weight)
+                        })
+            return flat
+        eval_criteria = flatten_criteria(criteria)
+        self.logger.info(f"[PanelScorerAgent] {len(eval_criteria)} criteria to score.")
+        system_content = self.template
+        supporting_text = ""
+        for doc in supporting_docs:
+            supporting_text += f"\n\n--- {doc.get('file_name', 'doc')} ---\n{doc.get('full_text', '')}"
+        context = f"## Solicitation Context\n{solicitation_md}\n\n## Main Proposal\n{proposal_text}\n\n## Supporting Documents\n{supporting_text}"
+        import re, json, asyncio
+        semaphore = asyncio.Semaphore(max_concurrent)
+        async def score_criterion(criterion):
+            max_retries = 5
+            base_delay = 2
+            crit_id = f"{criterion['type']}|{criterion['category']}|{criterion['sub_category']}"
+            for attempt in range(max_retries):
+                async with semaphore:
+                    self.logger.info(f"[PanelScorerAgent] Scoring: {crit_id} (attempt {attempt+1})")
+                    scoring = criterion.get("scoring", {})
+                    scoring_lines = []
+                    for label, desc in zip(["1.0", "2.0", "3.0", "4.0"], [scoring.get("unsatisfactory", ""), scoring.get("marginal", ""), scoring.get("satisfactory", ""), scoring.get("superior", "")]):
+                        scoring_lines.append(f"- {label}: {desc}")
+                    scoring_text = "\n".join(scoring_lines)
+                    prompt = f"""
+You are a panel reviewer. Score ONLY the following criterion:
+
+Type: {criterion['type']}
+Category: {criterion['category']}
+Sub-Category: {criterion['sub_category']}
+
+Description: {criterion['description']}
+
+Scoring Rubric:
+{scoring_text}
+
+Return your answer as a JSON object with the following fields:
+{{
+  "score": float (1.0-4.0, 0.5 increments),
+  "evidence": "string",
+  "reasoning": "string",
+  "improvements": "string"
+}}
+
+{self.agent_config.get('scoring_criteria', '')}
+{self.agent_config.get('review_style', '')}
+
+{context}
+"""
+                    messages = [SystemMessage(content=system_content), HumanMessage(content=prompt)]
+                    try:
+                        response = await llm.ainvoke(messages)
+                        feedback = response.content
+                        json_match = re.search(r'\{.*\}', feedback, re.DOTALL)
+                        if json_match:
+                            json_str = json_match.group(0)
+                            score_data = json.loads(json_str)
+                            if isinstance(score_data, dict) and "score" in score_data:
+                                self.logger.info(f"[PanelScorerAgent] Success for {crit_id}: {score_data}")
+                                return criterion, score_data, feedback
+                    except Exception as e:
+                        # Detect rate limit error by message or type
+                        err_str = str(e).lower()
+                        if "rate limit" in err_str or "429" in err_str:
+                            delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                            self.logger.warning(f"[PanelScorerAgent] Rate limit for {crit_id}, retrying in {delay:.2f}s (attempt {attempt+1})")
+                            await asyncio.sleep(delay)
+                            continue
+                        self.logger.error(f"[PanelScorerAgent] Exception for {crit_id} on attempt {attempt+1}: {e}")
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                        self.logger.warning(f"[PanelScorerAgent] Retry {crit_id} after {delay:.2f}s...")
+                        await asyncio.sleep(delay)
+            self.logger.error(f"[PanelScorerAgent] Failed to score {crit_id} after {max_retries} attempts.")
+            return criterion, {"score": None, "evidence": "", "reasoning": "Could not parse response", "improvements": ""}, feedback if 'feedback' in locals() else ""
+        results = await asyncio.gather(*(score_criterion(crit) for crit in eval_criteria))
+        # Aggregate
+        scores_json = {f"{c['type']}|{c['category']}|{c['sub_category']}": data for c, data, _ in results}
+        # Build markdown table with weights and total score
+        table_header = "| Type | Category | Sub-Category | Weight | Score | Evidence | Reasoning | Improvements |\n|---|---|---|---|---|---|---|---|"
+        table_rows = []
+        total_score = 0.0
+        total_weight = 0.0
+        for crit, data, _ in results:
+            weight = crit.get('weight', 0.0) or 0.0
+            score = data.get('score', 0.0) or 0.0
+            if score:
+                total_score += score * weight
+            total_weight += weight
+            row = f"| {crit['type']} | {crit['category']} | {crit['sub_category']} | {weight:.2f} | {score} | {data.get('evidence', '').replace('|', ' ')} | {data.get('reasoning', '').replace('|', ' ')} | {data.get('improvements', '').replace('|', ' ')} |"
+            table_rows.append(row)
+        markdown_table = table_header + "\n" + "\n".join(table_rows)
+        # Calculate normalized total score (weighted average)
+        normalized_score = total_score / total_weight if total_weight else 0.0
+        summary = f"Weighted Total Score: {normalized_score:.2f} (out of 4.0)\n"
+        # Save markdown table to file
+        output_dir.mkdir(parents=True, exist_ok=True)
+        table_path = output_dir / "panel_scorer_results.md"
+        with open(table_path, "w", encoding="utf-8") as f:
+            f.write(f"# Panel Scorer Results\n\n{markdown_table}\n\n{summary}")
+        # Compose feedback: summary + markdown table + raw JSON
+        feedback = f"### Panel Scorer Results\n\n{summary}\n{markdown_table}\n\n<details><summary>Raw JSON</summary>\n\n```json\n{json.dumps(scores_json, indent=2)}\n```\n</details>\n\nMarkdown table saved to: {table_path}"
+        return AgentOutput(
+            agent_name=self.agent_id,
+            feedback=feedback,
+            scores={f"{c['type']}|{c['category']}|{c['sub_category']}": d.get("score", None) for c, d, _ in results},
+            action_items=[],
+            confidence=0.9
+        ) 

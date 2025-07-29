@@ -240,12 +240,21 @@ class ReviewWorkflow:
             self.logger.info(f"Running {agent_id} review")
             try:
                 agent = self.agents[agent_id]
-                output = await agent.review(
-                    state.proposal_text,
-                    state.supporting_docs,
-                    state.criteria,
-                    state.solicitation_md
-                )
+                if agent_id == "panel_scorer":
+                    output = await agent.review(
+                        state.proposal_text,
+                        state.supporting_docs,
+                        state.criteria,
+                        state.solicitation_md,
+                        state.output_dir
+                    )
+                else:
+                    output = await agent.review(
+                        state.proposal_text,
+                        state.supporting_docs,
+                        state.criteria,
+                        state.solicitation_md
+                    )
                 self.logger.info(f"{agent_id} review completed")
                 return {"agent_outputs": {agent_id: output.dict()}}
             except Exception as e:

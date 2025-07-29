@@ -6,6 +6,7 @@ import logging
 from typing import Dict, Any, List
 from langchain_openai import ChatOpenAI
 from .base_agent import BaseAgent
+from .base_agent import PanelScorerAgent
 
 
 class AgentFactory:
@@ -21,7 +22,10 @@ class AgentFactory:
         Create an agent instance.
         """
         if agent_id not in self.agents:
-            self.agents[agent_id] = BaseAgent(agent_id, self.client)
+            if agent_id == "panel_scorer":
+                self.agents[agent_id] = PanelScorerAgent(agent_id, self.client)
+            else:
+                self.agents[agent_id] = BaseAgent(agent_id, self.client)
             self.logger.info(f"Created agent: {agent_id}")
         
         return self.agents[agent_id]
