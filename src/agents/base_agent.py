@@ -269,6 +269,13 @@ Provide a comprehensive review based on your role focus. Be specific, actionable
         return action_items 
 
 
+class CriterionScore(BaseModel):
+    score: float
+    evidence: str
+    reasoning: str
+    improvements: str
+
+
 class PanelScorerAgent(BaseAgent):
     """Specialized agent for panel_scorer: runs async LLM calls per criterion and aggregates results."""
 
@@ -319,7 +326,6 @@ class PanelScorerAgent(BaseAgent):
         warmup_delay = batch_config.get('warmup_delay', 3)
         base_delay = batch_config.get('base_delay', 5)
         max_retries = batch_config.get('max_retries', 8)
-        self.logger.info(f"[PanelScorerAgent] Batch config: batch_size={batch_size}, warmup_count={warmup_count}, warmup_delay={warmup_delay}, base_delay={base_delay}, max_retries={max_retries}")
         semaphore = asyncio.Semaphore(max_concurrent)
         def safe_json_loads(s):
             # Replace single backslashes not followed by valid escape with double backslash
@@ -329,11 +335,11 @@ class PanelScorerAgent(BaseAgent):
             except json.JSONDecodeError as e:
                 self.logger.error(f"[PanelScorerAgent] JSON decode error: {e}\nRaw: {s}")
                 raise
+        llm_structured = llm.with_structured_output(CriterionScore)
         async def score_criterion(criterion):
             crit_id = f"{criterion['type']}|{criterion['category']}|{criterion['sub_category']}"
             for attempt in range(max_retries):
                 async with semaphore:
-                    self.logger.info(f"[PanelScorerAgent] Scoring: {crit_id} (attempt {attempt+1})")
                     scoring = criterion.get("scoring", {})
                     scoring_lines = []
                     for label, desc in zip(["1.0", "2.0", "3.0", "4.0"], [scoring.get("unsatisfactory", ""), scoring.get("marginal", ""), scoring.get("satisfactory", ""), scoring.get("superior", "")]):
@@ -366,29 +372,21 @@ Return your answer as a JSON object with the following fields:
 """
                     messages = [SystemMessage(content=system_content), HumanMessage(content=prompt)]
                     try:
-                        response = await llm.ainvoke(messages)
-                        feedback = response.content
-                        json_match = re.search(r'\{.*\}', feedback, re.DOTALL)
-                        if json_match:
-                            json_str = json_match.group(0)
-                            score_data = safe_json_loads(json_str)
-                            if isinstance(score_data, dict) and "score" in score_data:
-                                self.logger.info(f"[PanelScorerAgent] Success for {crit_id}")
-                                return criterion, score_data, feedback
+                        result = await llm_structured.ainvoke(messages)
+                        if isinstance(result, CriterionScore):
+                            return criterion, result.dict(), result.json()
                     except Exception as e:
                         err_str = str(e).lower()
                         if "rate limit" in err_str or "429" in err_str:
                             delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
-                            self.logger.warning(f"[PanelScorerAgent] Rate limit for {crit_id}, retrying in {delay:.2f}s (attempt {attempt+1})")
                             await asyncio.sleep(delay)
                             continue
                         self.logger.error(f"[PanelScorerAgent] Exception for {crit_id} on attempt {attempt+1}: {e}")
                     if attempt < max_retries - 1:
                         delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
-                        self.logger.warning(f"[PanelScorerAgent] Retry {crit_id} after {delay:.2f}s...")
                         await asyncio.sleep(delay)
             self.logger.error(f"[PanelScorerAgent] Failed to score {crit_id} after {max_retries} attempts.")
-            return criterion, {"score": None, "evidence": "", "reasoning": "Could not parse response", "improvements": ""}, feedback if 'feedback' in locals() else ""
+            return criterion, {"score": None, "evidence": "", "reasoning": "Could not parse response", "improvements": ""}, ""
         # Serial warmup for first N criteria
         results = []
         self.logger.info(f"[PanelScorerAgent] Serial warmup for first {warmup_count} criteria...")

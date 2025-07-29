@@ -24,10 +24,7 @@ ocrmypdf = "^16.10.4"
 ipykernel = "^6.29.5"
 
 [tool.poetry.scripts]
-review = "src.cli:run_review"
-list-agents = "src.cli:run_list_agents"
-show-config = "src.cli:run_show_config"
-visualize-workflow = "src.cli:run_visualize_workflow"
+review = "src.cli:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

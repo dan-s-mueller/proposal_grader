@@ -33,7 +33,7 @@ class OutputFormatter:
                 f.write(f"# {role_name} Review\n\n")
                 f.write(feedback)
             
-            self.logger.info(f"Saved {role_name} feedback to {filepath}")
+            # Removed self.logger.info
     
     def save_agent_feedback(self, agent_output: Dict[str, Any], output_dir: Path):
         """
@@ -67,7 +67,7 @@ class OutputFormatter:
                 for i, item in enumerate(action_items, 1):
                     f.write(f"{i}. {item}\n")
         
-        self.logger.info(f"Saved {agent_name} feedback to {filepath}")
+        # Removed self.logger.info
     
     def save_scorecard(self, consolidated_scores: Dict[str, float], output_dir: Path):
         """
@@ -78,7 +78,7 @@ class OutputFormatter:
         with open(scorecard_path, "w", encoding="utf-8") as f:
             json.dump(consolidated_scores, f, indent=2)
         
-        self.logger.info(f"Saved scorecard to {scorecard_path}")
+        # Removed self.logger.info
     
     def save_summary(self, summary: str, output_dir: Path):
         """
@@ -89,7 +89,7 @@ class OutputFormatter:
         with open(summary_path, "w", encoding="utf-8") as f:
             f.write(summary)
         
-        self.logger.info(f"Saved summary to {summary_path}")
+        # Removed self.logger.info
     
     def save_action_items(self, action_items: List[str], output_dir: Path):
         """
@@ -102,7 +102,7 @@ class OutputFormatter:
             for i, item in enumerate(action_items, 1):
                 f.write(f"{i}. {item}\n")
         
-        self.logger.info(f"Saved action items to {action_items_path}")
+        # Removed self.logger.info
     
     def save_all_outputs(self, review_state: Any):
         """
@@ -123,7 +123,7 @@ class OutputFormatter:
         # Save action items
         self.save_action_items(review_state.action_items, output_dir)
         
-        self.logger.info(f"All outputs saved to {output_dir}")
+        # Removed self.logger.info
     
     def create_review_report(self, review_state: Any) -> str:
         """

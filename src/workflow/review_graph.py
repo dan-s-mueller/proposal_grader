@@ -396,3 +396,38 @@ class ReviewWorkflow:
     def get_agent_info(self) -> Dict[str, Any]:
         """Get information about available agents."""
         return self.agent_factory.get_available_agents() 
+
+def create_workflow_visualization(agents: list = None, output_dir: Path = Path("output")):
+    """Create and save a workflow graph visualization as a PNG. Returns the PNG file path or None."""
+    import json
+    from pathlib import Path
+    from langchain_openai import ChatOpenAI
+
+    if agents is None:
+        config_path = Path("config/system_config.json")
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = json.load(f)
+            agents = config.get("default_agents", [])
+        else:
+            agents = ["tech_lead", "business_strategist", "detail_checker", "panel_scorer", "storyteller"]
+
+    mock_client = ChatOpenAI(api_key="mock-key", model="gpt-4o")
+    workflow = ReviewWorkflow(
+        mock_client,
+        agents,
+        proposal_dir=Path("documents/proposal"),
+        supporting_dir=Path("documents/proposal/supporting_docs"),
+        solicitation_dir=Path("documents/solicitation")
+    )
+    app = workflow.graph
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        png_file = output_dir / "workflow.png"
+        png_data = app.get_graph().draw_mermaid_png()
+        with open(png_file, "wb") as f:
+            f.write(png_data)
+        return str(png_file)
+    except Exception as e:
+        print(f"Error generating workflow visualization: {e}")
+        return None 

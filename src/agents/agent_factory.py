@@ -26,7 +26,6 @@ class AgentFactory:
                 self.agents[agent_id] = PanelScorerAgent(agent_id, self.client)
             else:
                 self.agents[agent_id] = BaseAgent(agent_id, self.client)
-            self.logger.info(f"Created agent: {agent_id}")
         
         return self.agents[agent_id]
     
@@ -40,7 +39,6 @@ class AgentFactory:
             try:
                 agents[agent_id] = self.create_agent(agent_id)
             except Exception as e:
-                self.logger.error(f"Failed to create agent {agent_id}: {e}")
                 continue
         
         return agents
