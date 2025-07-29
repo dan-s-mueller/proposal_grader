@@ -50,41 +50,23 @@ class ReviewWorkflow:
         self.graph = self._create_workflow()
     
     def _create_workflow(self) -> StateGraph:
-        """Create the LangGraph workflow."""
-        
-        # Create the state graph
+        """Create the LangGraph workflow with async agent execution and join node."""
         workflow = StateGraph(ReviewState)
-        
-        # Add document processing node
         workflow.add_node("process_documents", self._create_document_processing_node())
-        
-        # Add nodes for each agent
         for agent_id in self.agent_config:
             workflow.add_node(agent_id, self._create_agent_node(agent_id))
-        
-        # Add aggregator node
+        workflow.add_node("join_agents", self._join_agents_node)
         workflow.add_node("aggregate_results", self._aggregate_results_node)
-        
-        # Define workflow: process documents first, then agents run sequentially
         workflow.set_entry_point("process_documents")
-        
-        # Connect document processing to first agent
-        if self.agent_config:
-            workflow.add_edge("process_documents", self.agent_config[0])
-        
-        # Connect agents in sequence (sequential execution)
-        for i in range(len(self.agent_config) - 1):
-            current_agent = self.agent_config[i]
-            next_agent = self.agent_config[i + 1]
-            workflow.add_edge(current_agent, next_agent)
-        
-        # Last agent feeds into aggregation
-        if self.agent_config:
-            workflow.add_edge(self.agent_config[-1], "aggregate_results")
-        
-        # Aggregation feeds to end
+        # Fan-out: process_documents → all agents
+        for agent_id in self.agent_config:
+            workflow.add_edge("process_documents", agent_id)
+        # Fan-in: all agents → join_agents
+        for agent_id in self.agent_config:
+            workflow.add_edge(agent_id, "join_agents")
+        # Join to aggregation
+        workflow.add_edge("join_agents", "aggregate_results")
         workflow.add_edge("aggregate_results", END)
-        
         return workflow.compile()
     
     def _create_document_processing_node(self) -> Callable:
@@ -247,22 +229,15 @@ class ReviewWorkflow:
         return markdown
     
     def _create_agent_node(self, agent_id: str):
-        """Create a node for a specific agent."""
-        
-        async def agent_node(state: ReviewState) -> ReviewState:
-            """Agent node that performs review with LangChain tracing."""
-            
-            # Check if documents were processed successfully
+        """Create a node for a specific agent that only updates its own output."""
+        async def agent_node(state: ReviewState) -> Dict[str, Any]:
             if not state.documents_processed:
                 self.logger.error("Documents not processed, skipping agent review")
-                return state
-            
+                return {}
             if state.processing_error:
                 self.logger.error(f"Document processing failed: {state.processing_error}")
-                return state
-            
+                return {}
             self.logger.info(f"Running {agent_id} review")
-            
             try:
                 agent = self.agents[agent_id]
                 output = await agent.review(
@@ -271,17 +246,10 @@ class ReviewWorkflow:
                     state.criteria,
                     state.solicitation_md
                 )
-                
-                # Directly update the state (safe with sequential execution)
-                state.agent_outputs[agent_id] = output.dict()
-                state.completed_agents.append(agent_id)
-                
                 self.logger.info(f"{agent_id} review completed")
-                
+                return {"agent_outputs": {agent_id: output.dict()}}
             except Exception as e:
                 self.logger.error(f"{agent_id} review failed: {e}")
-                
-                # Create error output
                 error_output = {
                     "agent_name": agent_id,
                     "feedback": f"Error in {agent_id} review: {str(e)}",
@@ -289,16 +257,17 @@ class ReviewWorkflow:
                     "action_items": [],
                     "confidence": 0.0
                 }
-                
-                # Directly update the state with error output
-                state.agent_outputs[agent_id] = error_output
-                state.completed_agents.append(agent_id)
-            
-            return state
-        
+                return {"agent_outputs": {agent_id: error_output}}
         return agent_node
-    
 
+    def _join_agents_node(self, state: ReviewState) -> ReviewState:
+        """Wait until all agent outputs are present, then proceed."""
+        if set(self.agent_config).issubset(set(state.agent_outputs.keys())):
+            self.logger.info("All agent reviews complete. Proceeding to aggregation.")
+            return state
+        else:
+            self.logger.info("Waiting for all agent reviews to complete...")
+            return state
     
     async def _aggregate_results_node(self, state: ReviewState) -> ReviewState:
         """Aggregate results from all agents."""

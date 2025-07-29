@@ -2,10 +2,18 @@
 State models for the LangGraph review workflow.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Annotated
 from pydantic import BaseModel, Field
 from pathlib import Path
 
+def merge_dicts(left, right, **kwargs):
+    if left is None:
+        left = {}
+    if right is None:
+        right = {}
+    merged = dict(left)
+    merged.update(right)
+    return merged
 
 class ReviewState(BaseModel):
     """State model for the review workflow."""
@@ -21,10 +29,7 @@ class ReviewState(BaseModel):
     solicitation_md: str = Field(default="", description="Solicitation markdown")
     
     # Agent outputs (stored as dictionary to handle dynamic agents)
-    agent_outputs: Dict[str, Any] = Field(default_factory=dict, description="Agent outputs by agent_id")
-    
-    # Track completed agents to avoid concurrent update conflicts
-    completed_agents: List[str] = Field(default_factory=list, description="List of completed agent IDs")
+    agent_outputs: Annotated[Dict[str, Any], merge_dicts] = Field(default_factory=dict, description="Agent outputs by agent_id")
     
     # Aggregated results
     all_agent_outputs: List[Dict[str, Any]] = Field(default_factory=list, description="All agent outputs")
@@ -40,4 +45,4 @@ class ReviewState(BaseModel):
     
     def is_all_agents_complete(self, expected_agents: List[str]) -> bool:
         """Check if all expected agents have completed."""
-        return set(expected_agents).issubset(set(self.completed_agents)) 
+        return set(expected_agents).issubset(set(self.agent_outputs.keys())) 
