@@ -42,10 +42,10 @@ src/
 | Agent ID | Persona | Focus | Output |
 |----------|---------|-------|--------|
 | **tech_lead** | Eric Roulo | Technical feasibility, elegance | Technical risks, missing equations |
-| **business_strategist** | Gerardo | Market, ROI, partnerships | Market gaps, pricing analysis |
-| **detail_checker** | Compliance | Solicitation checklist | Criterion → Found? → Where → Fix |
-| **panel_scorer** | Scoring | Criterion-based scoring | JSON: Criterion → Score → Justification |
-| **storyteller** | Narrative | Flow, clarity | Markdown with rewrite suggestions |
+| **business_strategist** | Gerardo Barrera | Market, ROI, partnerships | Market gaps, pricing analysis |
+| **detail_checker** | Compliance Nerd | Solicitation checklist | Criterion → Found? → Where → Fix |
+| **panel_scorer** | Panel Member | Criterion-based scoring | Score, Evidence, Reasoning, Improvements |
+| **storyteller** | Narrative Expert | Flow, clarity | Markdown with rewrite suggestions |
 
 ## 📁 File Structure
 
@@ -53,26 +53,23 @@ src/
 proposal_grader/
 ├── documents/
 │   ├── proposal/
-│   │   ├── main_proposal.pdf    # Main proposal (PDF only)
-│   │   ├── processed/            # Cached processed documents
-│   │   └── supporting_docs/      # Supporting PDFs, CSVs, and MDs (supports sub-folders)
+│   │   ├── supporting_docs/      # Supporting PDFs, CSVs, and MDs (supports sub-folders)
+│   │   ├── main_proposal.pdf     # Main proposal (PDF only)
+│   |   └── processed/            # Cached processed documents
 │   └── solicitation/             # Solicitation documents
-│       ├── NASA+2025+SBIR+Ignite+Solicitation.pdf  # Main solicitation PDF
-│       ├── criteria.json         # Static evaluation criteria (required)
 │       ├── supporting_docs/      # Supporting solicitation docs (PDF, CSV, MD)
+│       ├── criteria.json         # Static evaluation criteria (required)
 │       └── processed/            # Cached processed documents
 ├── output/                       # All outputs
 │   ├── feedback/
 │   │   ├── tech_lead.md
 │   │   ├── business_strategist.md
 │   │   └── ...
-│   ├── scorecard.json
 │   ├── summary.md
 │   ├── action_items.md
-│   ├── review.log               # Persistent logging
 │   └── workflow.png
-├── src/agents/templates/         # Agent behavior templates
 └── src/                         # Source code
+└── src/agents/templates/         # Agent behavior templates
 ```
 
 ## 🚀 Quick Start
@@ -88,19 +85,11 @@ export OPENAI_API_KEY="your-api-key"
 ```
 
 ### 2. Prepare Documents
-
-```bash
-# Create directory structure
-mkdir -p documents/proposal/supporting_docs
-mkdir -p documents/solicitation/supporting_docs
-
-# Add your documents:
-# - documents/proposal/main_proposal.pdf (main proposal - PDF only)
-# - documents/proposal/supporting_docs/*.pdf, *.csv, *.md (supporting docs - supports sub-folders)
-# - documents/solicitation/NASA+2025+SBIR+Ignite+Solicitation.pdf (main solicitation PDF)
-# - documents/solicitation/criteria.json (static evaluation criteria - required)
-# - documents/solicitation/supporting_docs/*.pdf, *.csv, *.md (supporting solicitation docs)
-```
+* documents/proposal/main_proposal.pdf (main proposal - PDF only)
+* documents/proposal/supporting_docs/*.pdf, *.csv, *.md (supporting docs - supports sub-folders)
+* documents/solicitation/main_solicitation.pdf (main solicitation PDF)
+* documents/solicitation/criteria.json (static evaluation criteria - required)
+* documents/solicitation/supporting_docs/*.pdf, *.csv, *.md (supporting solicitation docs)
 
 ### 3. Run Review
 

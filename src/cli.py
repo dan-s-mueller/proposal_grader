@@ -51,7 +51,7 @@ async def run_review_command(args):
         should_process_docs=args.process_docs
     )
     # Generate workflow visualization BEFORE running the review
-    print("\U0001F4CA Generating workflow visualization...")
+    print("Generating workflow visualization...")
     try:
         png_file = create_workflow_visualization(workflow.agent_config, output_dir)
         if png_file:
