@@ -35,6 +35,40 @@ class OutputFormatter:
             
             self.logger.info(f"Saved {role_name} feedback to {filepath}")
     
+    def save_agent_feedback(self, agent_output: Dict[str, Any], output_dir: Path):
+        """
+        Save individual agent feedback to markdown files.
+        """
+        feedback_dir = output_dir / "feedback"
+        feedback_dir.mkdir(parents=True, exist_ok=True)
+        
+        agent_name = agent_output.get("agent_name", "unknown")
+        feedback = agent_output.get("feedback", "")
+        scores = agent_output.get("scores", {})
+        action_items = agent_output.get("action_items", [])
+        
+        # Create markdown file
+        filename = f"{agent_name.lower()}.md"
+        filepath = feedback_dir / filename
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(f"# {agent_name.replace('_', ' ').title()} Review\n\n")
+            f.write(feedback)
+            
+            # Add scores if available
+            if scores:
+                f.write("\n## Scores\n\n")
+                for criterion, score in scores.items():
+                    f.write(f"- **{criterion}**: {score}\n")
+            
+            # Add action items if available
+            if action_items:
+                f.write("\n## Action Items\n\n")
+                for i, item in enumerate(action_items, 1):
+                    f.write(f"{i}. {item}\n")
+        
+        self.logger.info(f"Saved {agent_name} feedback to {filepath}")
+    
     def save_scorecard(self, consolidated_scores: Dict[str, float], output_dir: Path):
         """
         Save consolidated scores to JSON file.

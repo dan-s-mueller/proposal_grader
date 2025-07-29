@@ -4,14 +4,14 @@ Agent factory for creating and managing agents based on configuration.
 
 import logging
 from typing import Dict, Any, List
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
 from .base_agent import BaseAgent
 
 
 class AgentFactory:
     """Factory for creating and managing agents."""
     
-    def __init__(self, openai_client: OpenAI):
+    def __init__(self, openai_client: ChatOpenAI):
         self.client = openai_client
         self.logger = logging.getLogger(__name__)
         self.agents = {}

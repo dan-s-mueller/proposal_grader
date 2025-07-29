@@ -5,7 +5,7 @@ Utility for visualizing LangGraph workflows.
 import json
 from pathlib import Path
 from typing import List, Optional, Tuple
-from openai import OpenAI
+
 
 from ..workflow.review_graph import ReviewWorkflow
 
@@ -34,8 +34,9 @@ def visualize_workflow_graph(agents: Optional[List[str]] = None,
     
     print(f"Creating workflow graph with agents: {', '.join(agents)}")
     
-    # Create a mock OpenAI client (we don't need real API calls for visualization)
-    mock_client = OpenAI(api_key="mock-key")
+    # Create a mock LangChain client (we don't need real API calls for visualization)
+    from langchain_openai import ChatOpenAI
+    mock_client = ChatOpenAI(api_key="mock-key", model="gpt-4o")
     
     # Create the workflow with mock paths
     workflow = ReviewWorkflow(

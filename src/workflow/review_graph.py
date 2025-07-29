@@ -2,12 +2,11 @@
 LangGraph workflow for multi-role proposal review using configurable agents.
 """
 
-import asyncio
 import logging
 from typing import Dict, Any, List, Callable
 from pathlib import Path
 from langgraph.graph import StateGraph, END
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
 import os
 import json
 
@@ -20,7 +19,7 @@ from ..core.file_discovery import FileDiscovery
 class ReviewWorkflow:
     """LangGraph workflow for multi-role proposal review using configurable agents."""
     
-    def __init__(self, openai_client: OpenAI, agent_config: List[str] = None, 
+    def __init__(self, openai_client: ChatOpenAI, agent_config: List[str] = None, 
                  proposal_dir: Path = None, supporting_dir: Path = None, 
                  solicitation_dir: Path = None, should_process_docs: bool = True):
         self.client = openai_client
@@ -63,26 +62,27 @@ class ReviewWorkflow:
         for agent_id in self.agent_config:
             workflow.add_node(agent_id, self._create_agent_node(agent_id))
         
-        # Add join node that waits for all agents
-        workflow.add_node("join_agents", self._join_agents_node)
-        
         # Add aggregator node
         workflow.add_node("aggregate_results", self._aggregate_results_node)
         
         # Define workflow: process documents first, then agents run sequentially
         workflow.set_entry_point("process_documents")
         
-        # Connect agents sequentially instead of concurrently
-        previous_node = "process_documents"
-        for agent_id in self.agent_config:
-            workflow.add_edge(previous_node, agent_id)
-            previous_node = agent_id
+        # Connect document processing to first agent
+        if self.agent_config:
+            workflow.add_edge("process_documents", self.agent_config[0])
         
-        # Last agent feeds into join node
-        workflow.add_edge(previous_node, "join_agents")
+        # Connect agents in sequence (sequential execution)
+        for i in range(len(self.agent_config) - 1):
+            current_agent = self.agent_config[i]
+            next_agent = self.agent_config[i + 1]
+            workflow.add_edge(current_agent, next_agent)
         
-        # Join node feeds into aggregation
-        workflow.add_edge("join_agents", "aggregate_results")
+        # Last agent feeds into aggregation
+        if self.agent_config:
+            workflow.add_edge(self.agent_config[-1], "aggregate_results")
+        
+        # Aggregation feeds to end
         workflow.add_edge("aggregate_results", END)
         
         return workflow.compile()
@@ -90,18 +90,26 @@ class ReviewWorkflow:
     def _create_document_processing_node(self) -> Callable:
         """Create a node for processing documents."""
         
-        def process_documents(state: ReviewState) -> ReviewState:
+        async def process_documents(state: ReviewState) -> ReviewState:
             """Process all documents and load criteria."""
-            self.logger.info("Processing documents...")
+            if self.should_process_docs:
+                self.logger.info("Processing documents...")
+            else:
+                self.logger.info("Using cached processed documents (--no-process-docs flag)")
             
             # Process main proposal
             if self.proposal_dir and self.proposal_dir.exists():
-                processor = DocumentProcessor()
                 file_discovery = FileDiscovery()
                 main_proposal_path = file_discovery.find_main_proposal(self.proposal_dir)
                 
                 if main_proposal_path:
-                    proposal_data = processor.process_main_proposal(main_proposal_path)
+                    if self.should_process_docs:
+                        processor = DocumentProcessor()
+                        proposal_data = processor.process_main_proposal(main_proposal_path)
+                    else:
+                        # Load from cache only without creating DocumentProcessor
+                        proposal_data = self._load_cached_document(main_proposal_path, "main_proposal")
+                    
                     if 'full_text' not in proposal_data:
                         raise ValueError(f"Main proposal processing failed: missing 'full_text' field. Available fields: {list(proposal_data.keys())}")
                     state.proposal_text = proposal_data['full_text']
@@ -115,8 +123,16 @@ class ReviewWorkflow:
             
             # Process supporting documents
             if self.supporting_dir and self.supporting_dir.exists():
-                processor = DocumentProcessor()
-                supporting_docs = processor.process_supporting_docs(self.supporting_dir)
+                if self.should_process_docs:
+                    processor = DocumentProcessor()
+                    supporting_docs = processor.process_supporting_docs(self.supporting_dir)
+                else:
+                    # Load from cache only without creating DocumentProcessor
+                    supporting_docs = []
+                    for doc_path in FileDiscovery().find_supporting_docs(self.supporting_dir):
+                        doc_data = self._load_cached_document(doc_path, "supporting")
+                        supporting_docs.append(doc_data)
+                
                 state.supporting_docs = supporting_docs
                 self.logger.info(f"Processed {len(state.supporting_docs)} supporting documents")
             else:
@@ -124,8 +140,22 @@ class ReviewWorkflow:
             
             # Process solicitation documents and load criteria
             if self.solicitation_dir and self.solicitation_dir.exists():
-                processor = DocumentProcessor()
-                solicitation_data = processor.process_solicitation_docs(self.solicitation_dir)
+                if self.should_process_docs:
+                    processor = DocumentProcessor()
+                    solicitation_data = processor.process_solicitation_docs(self.solicitation_dir)
+                else:
+                    # Load from cache only without creating DocumentProcessor
+                    solicitation_docs = []
+                    file_discovery = FileDiscovery()
+                    solicitation_files = file_discovery.find_solicitation_docs(self.solicitation_dir)
+                    
+                    # Iterate through all file types
+                    for file_type, file_paths in solicitation_files.items():
+                        for doc_path in file_paths:
+                            doc_data = self._load_cached_document(doc_path, "solicitation")
+                            solicitation_docs.append(doc_data)
+                    solicitation_data = {"solicitation_documents": solicitation_docs}
+                
                 state.solicitation_md = self._create_solicitation_markdown(solicitation_data["solicitation_documents"])
                 
                 # Load criteria from static file
@@ -146,6 +176,57 @@ class ReviewWorkflow:
             return state
         
         return process_documents
+    
+    def _load_cached_document(self, original_path: Path, doc_type: str) -> Dict[str, Any]:
+        """Load a cached processed document without creating DocumentProcessor."""
+        import json
+        
+        # Get the processed document path
+        if doc_type == "main_proposal":
+            # Main proposal is stored in the proposal directory's processed folder
+            processed_dir = original_path.parent / "processed"
+        elif doc_type == "supporting":
+            # Supporting docs are stored in the proposal directory's processed folder
+            # original_path is like: documents/proposal/supporting_docs/support/file.pdf
+            # We need: documents/proposal/processed/
+            processed_dir = original_path.parent.parent.parent / "processed"
+        elif doc_type == "solicitation":
+            # Solicitation docs are stored in the solicitation directory's processed folder
+            # original_path could be like: documents/solicitation/supporting_docs/file.csv
+            # or: documents/solicitation/file.pdf
+            # We need: documents/solicitation/processed/
+            if "supporting_docs" in str(original_path):
+                processed_dir = original_path.parent.parent / "processed"
+            else:
+                processed_dir = original_path.parent / "processed"
+        else:
+            processed_dir = original_path.parent / "processed"
+        
+        base_name = original_path.stem
+        if doc_type == "supporting":
+            processed_path = processed_dir / f"supporting_{base_name}_processed.json"
+        elif doc_type == "solicitation":
+            processed_path = processed_dir / f"solicitation_{base_name}_processed.json"
+        else:
+            processed_path = processed_dir / f"{base_name}_processed.json"
+        
+        if not processed_path.exists():
+            raise FileNotFoundError(f"Cached processed document not found: {processed_path}")
+        
+        try:
+            with open(processed_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                self.logger.info(f"Loaded cached document: {list(data.keys()) if data else 'None'}")
+                
+                # Extract the standardized structure from the cached wrapper
+                if 'content' in data:
+                    return data['content']
+                else:
+                    # Fallback to the data itself if no content wrapper
+                    return data
+        except Exception as e:
+            self.logger.error(f"Failed to load cached document {processed_path}: {e}")
+            raise RuntimeError(f"Failed to load cached document {processed_path}: {e}")
     
     def _create_solicitation_markdown(self, solicitation_documents: List[Dict[str, Any]]) -> str:
         """Create a markdown summary of solicitation documents."""
@@ -184,45 +265,40 @@ class ReviewWorkflow:
             
             try:
                 agent = self.agents[agent_id]
-                output = agent.review(
+                output = await agent.review(
                     state.proposal_text,
                     state.supporting_docs,
                     state.criteria,
                     state.solicitation_md
                 )
                 
-                # Store output in state using dictionary
+                # Directly update the state (safe with sequential execution)
                 state.agent_outputs[agent_id] = output.dict()
                 state.completed_agents.append(agent_id)
+                
                 self.logger.info(f"{agent_id} review completed")
                 
             except Exception as e:
                 self.logger.error(f"{agent_id} review failed: {e}")
-                state.agent_outputs[agent_id] = {
+                
+                # Create error output
+                error_output = {
                     "agent_name": agent_id,
                     "feedback": f"Error in {agent_id} review: {str(e)}",
                     "scores": {},
                     "action_items": [],
                     "confidence": 0.0
                 }
+                
+                # Directly update the state with error output
+                state.agent_outputs[agent_id] = error_output
                 state.completed_agents.append(agent_id)
             
             return state
         
         return agent_node
     
-    async def _join_agents_node(self, state: ReviewState) -> ReviewState:
-        """Join node that waits for all agents to complete."""
-        self.logger.info("Checking if all agents have completed...")
-        
-        self.logger.info(f"Completed agents: {state.completed_agents}")
-        
-        if len(state.completed_agents) == len(self.agent_config):
-            self.logger.info("All agents completed, proceeding to aggregation")
-        else:
-            self.logger.info(f"Waiting for {len(self.agent_config) - len(state.completed_agents)} more agents...")
-        
-        return state
+
     
     async def _aggregate_results_node(self, state: ReviewState) -> ReviewState:
         """Aggregate results from all agents."""
@@ -308,10 +384,33 @@ class ReviewWorkflow:
         
         # Debug: Check what type we got back
         self.logger.info(f"Workflow returned type: {type(final_state)}")
-        if hasattr(final_state, '__dict__'):
+        
+        # Handle the case where LangGraph returns a dict instead of ReviewState
+        if isinstance(final_state, dict):
+            self.logger.info("Converting dict to ReviewState object")
+            # Convert dict back to ReviewState
+            try:
+                # Extract the state from the dict (LangGraph wraps it)
+                if 'state' in final_state:
+                    state_dict = final_state['state']
+                else:
+                    state_dict = final_state
+                
+                # Create a new ReviewState from the dict
+                review_state = ReviewState(**state_dict)
+                self.logger.info("Successfully converted dict to ReviewState")
+                return review_state
+            except Exception as e:
+                self.logger.error(f"Failed to convert dict to ReviewState: {e}")
+                # Fallback: create a minimal ReviewState
+                return ReviewState(output_dir=output_dir)
+        elif hasattr(final_state, '__dict__'):
             self.logger.info(f"Final state attributes: {list(final_state.__dict__.keys())}")
+            return final_state
         else:
-            self.logger.info(f"Final state is not an object: {final_state}")
+            self.logger.info(f"Final state is not an object!")
+            # Fallback: create a minimal ReviewState
+            return ReviewState(output_dir=output_dir)
         
         self.logger.info("Review workflow completed")
         return final_state

@@ -2,7 +2,6 @@
 CLI interface for the multi-agent proposal review system.
 """
 
-import asyncio
 import argparse
 import logging
 import os
@@ -10,7 +9,6 @@ import sys
 from pathlib import Path
 from typing import List
 from dotenv import load_dotenv
-from openai import OpenAI
 from langsmith import traceable
 
 from .core.document_processor import DocumentProcessor
@@ -68,7 +66,9 @@ async def run_review_command(args):
     
     # Validate environment
     api_key, model = validate_environment()
-    client = OpenAI(api_key=api_key)
+    # Create LangChain client instead of direct OpenAI
+    from langchain_openai import ChatOpenAI
+    client = ChatOpenAI(api_key=api_key, model=model)
     
     # Setup paths
     proposal_dir = Path(args.proposal_dir)
@@ -86,6 +86,7 @@ async def run_review_command(args):
     logger.info(f"Agent configuration: {agent_config}")
     
     # Create workflow with document paths and processing flag
+    logger.info(f"Document processing flag: {args.process_docs}")
     workflow = ReviewWorkflow(
         client, 
         agent_config, 
@@ -94,6 +95,22 @@ async def run_review_command(args):
         solicitation_dir=solicitation_dir,
         should_process_docs=args.process_docs
     )
+    
+    # Generate workflow visualization BEFORE running the review
+    print("📊 Generating workflow visualization...")
+    try:
+        from .utils.workflow_visualizer import create_workflow_visualization
+        png_file, svg_file = create_workflow_visualization(workflow.agent_config, output_dir)
+        if png_file:
+            logger.info(f"Workflow visualization saved: {png_file}")
+            print(f"✅ Workflow visualization saved: {png_file}")
+        else:
+            print("⚠️  Workflow visualization failed")
+    except Exception as e:
+        logger.warning(f"Failed to generate workflow visualization: {e}")
+        print(f"⚠️  Workflow visualization failed: {e}")
+    
+    print("\n🚀 Starting review workflow...")
     
     # Run the review workflow
     try:
@@ -143,13 +160,15 @@ async def run_review_command(args):
         sys.exit(1)
 
 
-async def list_agents_command(args):
+def list_agents_command(args):
     """Command to list available agents."""
     print("=== Available Agents ===")
     
     # Validate environment
     api_key, model = validate_environment()
-    client = OpenAI(api_key=api_key)
+    # Create LangChain client instead of direct OpenAI
+    from langchain_openai import ChatOpenAI
+    client = ChatOpenAI(api_key=api_key, model=model)
     
     # Create agent factory and get available agents
     agent_factory = AgentFactory(client)
@@ -187,7 +206,7 @@ async def visualize_workflow_command(args):
         sys.exit(1)
 
 
-async def show_config_command(args):
+def show_config_command(args):
     """Command to show system configuration."""
     print("=== System Configuration ===")
     
@@ -220,30 +239,35 @@ async def show_config_command(args):
 
 def run_review():
     """Wrapper function for poetry run review."""
-    import asyncio
     import sys
+    import argparse
+    import asyncio
     
     # Setup logging
     setup_logging()
     
-    # Create a mock args object with review command
-    class MockArgs:
-        def __init__(self):
-            self.command = "review"
-            self.proposal_dir = "documents/proposal"
-            self.supporting_dir = "documents/proposal/supporting_docs"
-            self.solicitation_dir = "documents/solicitation"
-            self.agents = None
-            self.process_docs = True
-            self.use_existing_criteria = False
-            self.criteria_file = "output/criteria.json"
+    # Create argument parser for review command
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--proposal-dir", default="documents/proposal")
+    parser.add_argument("--supporting-dir", default="documents/proposal/supporting_docs")
+    parser.add_argument("--solicitation-dir", default="documents/solicitation")
+    parser.add_argument("--agents")
+    parser.add_argument("--process-docs", action="store_true", default=True)
+    parser.add_argument("--no-process-docs", dest="process_docs", action="store_false")
     
-    args = MockArgs()
+    # Parse arguments (skip the script name)
+    args = parser.parse_args(sys.argv[1:])
+    args.command = "review"
+    
+    # Debug: Log the parsed arguments
+    logger = logging.getLogger(__name__)
+    logger.info(f"DEBUG: Parsed process_docs = {args.process_docs}")
+    logger.info(f"DEBUG: sys.argv = {sys.argv}")
+    
     asyncio.run(run_review_command(args))
 
 def run_list_agents():
     """Wrapper function for poetry run list-agents."""
-    import asyncio
     import sys
     
     # Setup logging
@@ -254,11 +278,10 @@ def run_list_agents():
             self.command = "list-agents"
     
     args = MockArgs()
-    asyncio.run(list_agents_command(args))
+    list_agents_command(args)
 
 def run_show_config():
     """Wrapper function for poetry run show-config."""
-    import asyncio
     import sys
     
     # Setup logging
@@ -269,11 +292,10 @@ def run_show_config():
             self.command = "show-config"
     
     args = MockArgs()
-    asyncio.run(show_config_command(args))
+    show_config_command(args)
 
 def run_visualize_workflow():
     """Wrapper function for poetry run visualize-workflow."""
-    import asyncio
     import sys
     
     # Setup logging
@@ -285,7 +307,7 @@ def run_visualize_workflow():
             self.agents = None
     
     args = MockArgs()
-    asyncio.run(visualize_workflow_command(args))
+    visualize_workflow_command(args)
 
 def main():
     """Main CLI entry point."""
@@ -350,6 +372,12 @@ Examples:
     visualize_parser = subparsers.add_parser("visualize", help="Generate workflow visualization")
     
     args = parser.parse_args()
+    
+    # Debug: Log all arguments
+    logger = logging.getLogger(__name__)
+    if hasattr(args, 'process_docs'):
+        logger.info(f"DEBUG: process_docs = {args.process_docs}")
+        logger.info(f"DEBUG: sys.argv = {sys.argv}")
     
     # Run the appropriate command
     if args.command == "review":

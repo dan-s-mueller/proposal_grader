@@ -8,11 +8,11 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
-from openai import OpenAI
+
 import os
 from langsmith import traceable
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+# from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
 
 
@@ -28,7 +28,7 @@ class AgentOutput(BaseModel):
 class BaseAgent:
     """Generic agent class that loads templates and can be configured for different roles."""
     
-    def __init__(self, agent_id: str, openai_client: OpenAI):
+    def __init__(self, agent_id: str, openai_client: ChatOpenAI):
         self.agent_id = agent_id
         self.client = openai_client
         self.logger = logging.getLogger(f"agent.{agent_id}")
@@ -89,25 +89,23 @@ class BaseAgent:
         
         return config
     
-    def review(self, proposal_text: str, supporting_docs: List[Dict[str, Any]], 
+    async def review(self, proposal_text: str, supporting_docs: List[Dict[str, Any]], 
                criteria: Dict[str, Any], solicitation_md: str) -> AgentOutput:
         """Perform the review using the agent's template and LLM."""
         
-        # Create LangChain prompt template
-        system_template = self.template
-        human_template = self._create_agent_prompt(proposal_text, supporting_docs, criteria, solicitation_md)
+        # Create the prompt content
+        system_content = self.template
+        human_content = self._create_agent_prompt(proposal_text, supporting_docs, criteria, solicitation_md)
         
-        # Create prompt template
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_template),
-            ("human", human_template)
-        ])
+        # Create messages directly to avoid format string issues
+        # from langchain.schema import SystemMessage, HumanMessage
+        messages = [
+            SystemMessage(content=system_content),
+            HumanMessage(content=human_content)
+        ]
         
-        # Format the prompt
-        formatted_prompt = prompt.format_messages()
-        
-        # Make the LLM call using LangChain
-        response = self.llm.invoke(formatted_prompt)
+        # Make the LLM call using LangChain async
+        response = await self.llm.ainvoke(messages)
         feedback = response.content
         
         # Extract scores

@@ -36,4 +36,8 @@ class ReviewState(BaseModel):
     output_dir: Path = Field(description="Output directory for results")
     
     class Config:
-        arbitrary_types_allowed = True 
+        arbitrary_types_allowed = True
+    
+    def is_all_agents_complete(self, expected_agents: List[str]) -> bool:
+        """Check if all expected agents have completed."""
+        return set(expected_agents).issubset(set(self.completed_agents)) 
