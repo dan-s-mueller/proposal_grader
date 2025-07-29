@@ -52,8 +52,9 @@ env.bak/
 venv.bak/
 
 # DM stuff
-prompts/
 *.log
+*.DS_Store
+prompts/
 proposal/
-.DS_Store
-output/*.csv
+solicitation/
+output/
