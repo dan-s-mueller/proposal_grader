@@ -1,19 +1,19 @@
 {
   "llm": {
     "agent_reviews": {
-      "model": "gpt-4o",
+      "model": "gpt-4.1-nano",
       "temperature": 0.1
     },
     "solicitation_processing": {
-      "model": "gpt-4o",
+      "model": "gpt-4.1-nano",
       "temperature": 0.0
     },
     "document_processing": {
-      "model": "gpt-4o",
-      "temperature": 0.1
+      "model": "gpt-4.1-nano",
+      "temperature": 0.0
     },
     "default": {
-      "model": "gpt-4o",
+      "model": "gpt-4.1-nano",
       "temperature": 0.1
     }
   },
