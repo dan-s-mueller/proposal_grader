@@ -87,11 +87,6 @@ Review and trim if necessary. Keep exact criterion wording.
 
 The system uses `config/system_config.json` for centralized configuration:
 
-**LLM Settings:**
-- `agent_reviews`: GPT-4o with temperature 0.7 (for agent reviews)
-- `solicitation_processing`: GPT-3.5-turbo with temperature 0.3 (for document processing)
-- `default`: GPT-4o with temperature 0.5 (fallback)
-
 **Output Settings:**
 - `save_individual_agent_outputs`: Save individual agent feedback files
 - `save_consolidated_summary`: Save consolidated summary
@@ -247,12 +242,14 @@ documents/
 ### 7.1 Proposal Documents
 
 **Main Proposal:**
-- **DOCX** (preferred): Full heading structure preserved, best for analysis
-- **PDF**: Converted to text, basic structure maintained
+- **DOCX** (preferred): Converted to markdown with LLM enhancement
+- **PDF**: Converted to markdown with OCR and LLM enhancement
 
 **Supporting Documents:**
-- **PDF**: Converted to markdown text
-- **DOCX**: Extracted as plain text with paragraph structure
+- **PDF**: Converted to markdown with OCR and LLM enhancement
+- **DOCX**: Converted to markdown with LLM enhancement
+- **TXT**: Converted to markdown with LLM enhancement
+- **MD**: Converted to markdown with LLM enhancement
 
 ### 7.2 Solicitation Documents
 
@@ -260,19 +257,39 @@ documents/
 - Main solicitation documents
 - Q&A addenda
 - Technical specifications
-- Converted to markdown for processing
+- Converted to markdown with OCR and LLM enhancement
 
 **CSV Files:**
 - Evaluation criteria tables
 - Scoring rubrics
 - Structured data
-- Converted to readable text format
+- Converted to readable text format with LLM enhancement
 
 **MD Files:**
 - Technical descriptions
 - FAQs and guidance
 - Pre-formatted markdown content
-- Used directly as-is
+- Enhanced with LLM processing
+
+### 7.3 Document Processing Features
+
+**Unified Processing:**
+- All documents processed using Marker with LLM enhancement
+- Automatic OCR for PDF documents
+- Intelligent text extraction and structure preservation
+- Consistent markdown output format
+
+**LLM Enhancement:**
+- Uses GPT-4o for document analysis and conversion
+- Maintains document structure and formatting
+- Improves readability and organization
+- Handles complex layouts and tables
+
+**OCR Processing:**
+- Automatic OCR for PDF documents
+- Handles scanned documents and images
+- Preserves text layout and formatting
+- Supports multiple languages
 
 ### 7.3 Folder Organization
 

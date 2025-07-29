@@ -12,11 +12,11 @@ openai = "*"
 python-dotenv = "*"
 langgraph = "*"
 langsmith = "*"
-python-docx = "*"
 marker-pdf = "^1.8.2"
 pydantic = "^2.11.7"
 graphviz = "*"
 pydot = "*"
+ocrmypdf = "^16.10.4"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"

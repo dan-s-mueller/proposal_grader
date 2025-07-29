@@ -15,7 +15,6 @@ from langsmith import traceable
 
 from .core.document_processor import DocumentProcessor
 from .core.file_discovery import FileDiscovery
-from .core.solicitation_ingester import SolicitationIngester
 from .workflow.review_graph import ReviewWorkflow
 from .utils.output_formatters import OutputFormatter
 from .agents.agent_factory import AgentFactory
@@ -24,14 +23,27 @@ from .utils.workflow_visualizer import create_workflow_visualization
 
 
 def setup_logging():
-    """Setup logging configuration."""
+    """Setup simple logging to append to review.log."""
+    # Create output directory if it doesn't exist
+    output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
+    
+    # Setup simple file logging
+    log_file = output_dir / "review.log"
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
+            logging.FileHandler(log_file, mode='a', encoding='utf-8'),
             logging.StreamHandler()
         ]
     )
+    
+    # Log command execution
+    logger = logging.getLogger(__name__)
+    logger.info("=" * 50)
+    logger.info(f"CLI command executed: {' '.join(sys.argv)}")
+    logger.info("=" * 50)
 
 
 def validate_environment():
@@ -47,33 +59,11 @@ def validate_environment():
     return api_key, model
 
 
-async def ingest_solicitation_command(args):
-    """Command to ingest solicitation documents."""
-    print("=== Solicitation Ingestion ===")
-    
-    # Validate environment
-    api_key, model = validate_environment()
-    client = OpenAI(api_key=api_key)
-    
-    # Setup paths
-    solicitation_dir = Path(args.solicitation_dir)
-    output_dir = Path(args.output_dir)
-    
-    # Create ingester and process
-    ingester = SolicitationIngester(client)
-    
-    try:
-        result = ingester.ingest_solicitation(solicitation_dir, output_dir)
-        print(f"✓ Solicitation ingested successfully")
-        print(f"  - Criteria: {len(result['criteria_data'].get('evaluation_criteria', []))} criteria extracted")
-        print(f"  - Output: {output_dir}")
-    except Exception as e:
-        print(f"✗ Solicitation ingestion failed: {e}")
-        sys.exit(1)
-
-
 async def run_review_command(args):
     """Command to run the multi-agent review."""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting multi-agent proposal review")
+    
     print("=== Multi-Agent Proposal Review ===")
     
     # Validate environment
@@ -86,8 +76,14 @@ async def run_review_command(args):
     solicitation_dir = Path(args.solicitation_dir)
     output_dir = Path("output")  # Always use output/ folder
     
+    logger.info(f"Proposal directory: {proposal_dir}")
+    logger.info(f"Supporting docs directory: {supporting_dir}")
+    logger.info(f"Solicitation directory: {solicitation_dir}")
+    logger.info(f"Output directory: {output_dir}")
+    
     # Parse agent configuration
     agent_config = args.agents.split(',') if args.agents else None
+    logger.info(f"Agent configuration: {agent_config}")
     
     # Create workflow with document paths and processing flag
     workflow = ReviewWorkflow(
@@ -101,10 +97,19 @@ async def run_review_command(args):
     
     # Run the review workflow
     try:
+        logger.info("Starting workflow execution")
         final_state = await workflow.run_review(output_dir)
         
+        # Check if we got a proper ReviewState object
+        if not hasattr(final_state, 'documents_processed'):
+            logger.error(f"Workflow returned unexpected type: {type(final_state)}")
+            print(f"✗ Review workflow failed: Workflow returned unexpected result type")
+            sys.exit(1)
+        
+        # Check for processing errors
         if final_state.processing_error:
-            print(f"✗ Document processing failed: {final_state.processing_error}")
+            logger.error(f"Document processing failed: {final_state.processing_error}")
+            print(f"✗ Review workflow failed: {final_state.processing_error}")
             sys.exit(1)
         
         # Save outputs
@@ -126,12 +131,14 @@ async def run_review_command(args):
         if final_state.action_items:
             output_formatter.save_action_items(final_state.action_items, output_dir)
         
+        logger.info("Multi-agent review completed successfully")
         print("✓ Multi-agent review completed successfully")
         print(f"  - Output directory: {output_dir}")
         print(f"  - Agents used: {', '.join(workflow.agent_config)}")
         print(f"  - Document processing: {'Enabled' if args.process_docs else 'Skipped'}")
         
     except Exception as e:
+        logger.error(f"Review workflow failed: {e}", exc_info=True)
         print(f"✗ Review workflow failed: {e}")
         sys.exit(1)
 
@@ -216,6 +223,9 @@ def run_review():
     import asyncio
     import sys
     
+    # Setup logging
+    setup_logging()
+    
     # Create a mock args object with review command
     class MockArgs:
         def __init__(self):
@@ -225,6 +235,8 @@ def run_review():
             self.solicitation_dir = "documents/solicitation"
             self.agents = None
             self.process_docs = True
+            self.use_existing_criteria = False
+            self.criteria_file = "output/criteria.json"
     
     args = MockArgs()
     asyncio.run(run_review_command(args))
@@ -233,6 +245,9 @@ def run_list_agents():
     """Wrapper function for poetry run list-agents."""
     import asyncio
     import sys
+    
+    # Setup logging
+    setup_logging()
     
     class MockArgs:
         def __init__(self):
@@ -246,6 +261,9 @@ def run_show_config():
     import asyncio
     import sys
     
+    # Setup logging
+    setup_logging()
+    
     class MockArgs:
         def __init__(self):
             self.command = "show-config"
@@ -258,6 +276,9 @@ def run_visualize_workflow():
     import asyncio
     import sys
     
+    # Setup logging
+    setup_logging()
+    
     class MockArgs:
         def __init__(self):
             self.command = "visualize-workflow"
@@ -268,6 +289,9 @@ def run_visualize_workflow():
 
 def main():
     """Main CLI entry point."""
+    # Setup logging first
+    setup_logging()
+    
     # Get the script name to determine which command to run
     script_name = sys.argv[0].split('/')[-1] if '/' in sys.argv[0] else sys.argv[0]
     
@@ -276,8 +300,7 @@ def main():
         'review': 'review',
         'list-agents': 'list-agents', 
         'show-config': 'show-config',
-        'visualize-workflow': 'visualize-workflow',
-        'ingest-solicitation': 'ingest-solicitation'
+        'visualize': 'visualize'
     }
     
     # If we're running as a script, set the command
@@ -286,25 +309,30 @@ def main():
         # Insert the command as the first argument
         sys.argv.insert(1, command)
     
-    # Parse arguments
-    parser = argparse.ArgumentParser(description="Multi-Agent Proposal Review System")
+    # Create argument parser
+    parser = argparse.ArgumentParser(
+        description="Multi-agent proposal review system",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  poetry run review                                    # Run with all agents
+  poetry run review --agents tech_lead,panel_scorer   # Run with specific agents
+  poetry run review --no-process-docs                 # Skip document processing
+  poetry run list-agents                              # List available agents
+  poetry run show-config                              # Show configuration
+  poetry run visualize                                # Generate workflow visualization
+        """
+    )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
-    
-    # Ingest solicitation command
-    ingest_parser = subparsers.add_parser("ingest-solicitation", help="Ingest solicitation documents")
-    ingest_parser.add_argument("--solicitation-dir", default="documents/solicitation", 
-                              help="Directory containing solicitation documents")
-    ingest_parser.add_argument("--output-dir", default="solicitation_md", 
-                              help="Output directory for extracted criteria")
     
     # Review command
     review_parser = subparsers.add_parser("review", help="Run multi-agent proposal review")
     review_parser.add_argument("--proposal-dir", default="documents/proposal", 
-                              help="Directory containing main proposal")
+                              help="Directory containing main proposal PDF")
     review_parser.add_argument("--supporting-dir", default="documents/proposal/supporting_docs", 
-                              help="Directory containing supporting documents")
+                              help="Directory containing supporting documents (PDF, CSV, MD)")
     review_parser.add_argument("--solicitation-dir", default="documents/solicitation", 
-                              help="Directory containing solicitation documents")
+                              help="Directory containing solicitation documents (PDF, CSV, MD)")
     review_parser.add_argument("--agents", 
                               help="Comma-separated list of agents to use (e.g., tech_lead,business_strategist)")
     review_parser.add_argument("--process-docs", action="store_true", default=True,
@@ -315,13 +343,11 @@ def main():
     # List agents command
     list_parser = subparsers.add_parser("list-agents", help="List available agents")
     
-    # Visualize workflow command
-    visualize_parser = subparsers.add_parser("visualize-workflow", help="Visualize the workflow structure")
-    visualize_parser.add_argument("--agents", 
-                                 help="Comma-separated list of agents to include")
-    
     # Show config command
-    config_parser = subparsers.add_parser("show-config", help="Show system configuration")
+    config_parser = subparsers.add_parser("show-config", help="Show current configuration")
+    
+    # Visualize workflow command
+    visualize_parser = subparsers.add_parser("visualize", help="Generate workflow visualization")
     
     args = parser.parse_args()
     
@@ -332,10 +358,8 @@ def main():
         list_agents_command(args)
     elif args.command == "show-config":
         show_config_command(args)
-    elif args.command == "visualize-workflow":
+    elif args.command == "visualize":
         asyncio.run(visualize_workflow_command(args))
-    elif args.command == "ingest-solicitation":
-        ingest_solicitation_command(args)
     else:
         parser.print_help()
         sys.exit(1)

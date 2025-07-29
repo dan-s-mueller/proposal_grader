@@ -26,15 +26,7 @@ class ConfigLoader:
             raise RuntimeError(f"Could not load config from {self.config_path}: {e}")
     
     def get_llm_config(self, context: str = "default") -> Dict[str, Any]:
-        """
-        Get LLM configuration for a specific context.
-        
-        Args:
-            context: The context for which to get LLM config (e.g., 'agent_reviews', 'solicitation_processing', 'default')
-            
-        Returns:
-            Dictionary with model, temperature, and other LLM settings
-        """
+        """Get LLM configuration for a specific context."""
         config = self.config.get("llm", {}).get(context, {})
         
         if not config:

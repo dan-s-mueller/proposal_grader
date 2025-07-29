@@ -27,8 +27,7 @@ src/
 │   └── agent_factory.py    # Agent creation and management
 ├── core/                    # Document processing
 │   ├── document_processor.py
-│   ├── file_discovery.py
-│   └── solicitation_ingester.py
+│   └── file_discovery.py
 ├── workflow/                # LangGraph orchestration
 │   ├── review_graph.py
 │   └── state_models.py
@@ -53,11 +52,14 @@ src/
 proposal_grader/
 ├── documents/
 │   ├── proposal/
-│   │   ├── main_proposal.docx    # Main proposal (Word preferred, PDF supported)
+│   │   ├── main_proposal.pdf    # Main proposal (PDF)
 │   │   ├── processed/            # Cached processed documents
-│   │   └── supporting_docs/      # Supporting PDFs and DOCXs (supports sub-folders)
-│   └── solicitation/             # Solicitation PDFs, CSVs, and MDs (supports sub-folders)
-│       ├── processed/            # Cached processed documents
+│   │   └── supporting_docs/      # Supporting PDFs, CSVs, and MDs (supports sub-folders)
+│   └── solicitation/             # Solicitation documents
+│       ├── NASA+2025+SBIR+Ignite+Solicitation.pdf  # Main solicitation PDF
+│       ├── criteria.json         # Static evaluation criteria
+│       ├── supporting_docs/      # Supporting solicitation docs (PDF, CSV, MD)
+│       └── processed/            # Cached processed documents
 ├── output/                       # All outputs
 │   ├── feedback/
 │   │   ├── tech_lead.md
@@ -66,7 +68,6 @@ proposal_grader/
 │   ├── scorecard.json
 │   ├── summary.md
 │   ├── action_items.md
-│   ├── criteria.json
 │   ├── solicitation.md
 │   └── workflow.png
 ├── src/agents/templates/         # Agent behavior templates
@@ -90,22 +91,17 @@ export OPENAI_API_KEY="your-api-key"
 ```bash
 # Create directory structure
 mkdir -p documents/proposal/supporting_docs
-mkdir -p documents/solicitation
+mkdir -p documents/solicitation/supporting_docs
 
 # Add your documents:
-# - documents/proposal/main_proposal.docx (main proposal - DOCX preferred, PDF supported)
-# - documents/proposal/supporting_docs/*.pdf or *.docx (supporting docs - supports sub-folders)
-# - documents/solicitation/*.pdf, *.csv, *.md (solicitation docs - supports sub-folders)
+# - documents/proposal/main_proposal.pdf (main proposal - PDF)
+# - documents/proposal/supporting_docs/*.pdf, *.csv, *.md (supporting docs - supports sub-folders)
+# - documents/solicitation/NASA+2025+SBIR+Ignite+Solicitation.pdf (main solicitation PDF)
+# - documents/solicitation/criteria.json (static evaluation criteria)
+# - documents/solicitation/supporting_docs/*.pdf, *.csv, *.md (supporting solicitation docs)
 ```
 
-### 3. Ingest Solicitation
-
-```bash
-# Extract evaluation criteria from solicitation
-poetry run ingest-solicitation
-```
-
-### 4. Run Review
+### 3. Run Review
 
 ```bash
 # Run with all agents (default)
@@ -121,19 +117,25 @@ poetry run review --no-process-docs
 poetry run list-agents
 
 # Visualize workflow structure
-poetry run visualize-workflow
+poetry run visualize
 ```
 
 ## 📄 Supported File Formats
 
 ### Proposal Documents
-- **Main Proposal**: DOCX (preferred for heading structure) or PDF
-- **Supporting Documents**: PDF or DOCX
+- **Main Proposal**: DOCX (preferred) or PDF - converted to markdown with LLM enhancement
+- **Supporting Documents**: PDF, DOCX, TXT, MD - converted to markdown with LLM enhancement
 
 ### Solicitation Documents  
-- **PDF**: Main solicitation documents, Q&A addenda, technical specifications
-- **CSV**: Evaluation criteria tables, scoring rubrics, structured data
-- **MD**: Technical descriptions, FAQs, guidance documents
+- **PDF**: Main solicitation documents, Q&A addenda, technical specifications - converted to markdown with OCR and LLM enhancement
+- **CSV**: Evaluation criteria tables, scoring rubrics, structured data - converted to readable text with LLM enhancement
+- **MD**: Technical descriptions, FAQs, guidance documents - enhanced with LLM processing
+
+### Document Processing Features
+- **Unified Processing**: All documents processed using Marker with LLM enhancement
+- **OCR Support**: Automatic OCR for PDF documents with text layout preservation
+- **LLM Enhancement**: Uses GPT-4o for intelligent document analysis and conversion
+- **Consistent Output**: All documents converted to structured markdown format
 
 ### Folder Organization
 - All document types support sub-folder organization

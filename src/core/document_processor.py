@@ -1,23 +1,59 @@
 """
-Document processor for handling multiple file formats.
-Supports DOCX, PDF, CSV, and MD files for proposals and solicitation documents.
+Unified document processor using Marker for PDF processing with LLM enhancement.
+Supports PDF, CSV, and MD files with OCR and LLM processing.
 """
 
 import logging
 import csv
+import json
+import os
 from pathlib import Path
 from typing import List, Dict, Any
-import docx
+from dotenv import load_dotenv
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.output import text_from_rendered
+from marker.services.openai import OpenAIService
 
 
 class DocumentProcessor:
-    """Handles processing of multiple document formats."""
+    """Unified document processor using Marker for PDF processing."""
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        
+        # Load environment variables from .env file
+        load_dotenv()
+        
+        # Initialize Marker converter with OpenAI LLM enhancement
+        try:
+            # Load configuration
+            from ..utils.config_loader import ConfigLoader
+            config_loader = ConfigLoader()
+            llm_config = config_loader.get_llm_config("document_processing")
+            
+            # Create config for OpenAIService
+            openai_config = {
+                "openai_api_key": os.getenv("OPENAI_API_KEY"),
+                "openai_model": llm_config.get("model"),
+                "openai_base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                "openai_image_format": "png"
+            }
+            
+            # Create OpenAI service for LLM enhancement with proper configuration
+            self.openai_service = OpenAIService(config=openai_config)
+            self.logger.info("OpenAIService created successfully")
+            
+            # Initialize Marker converter with LLM service using config
+            self.converter = PdfConverter(
+                artifact_dict=create_model_dict(),
+                llm_service="marker.services.openai.OpenAIService",
+                config=openai_config
+            )
+            self.logger.info("Marker converter initialized successfully with OpenAI LLM")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Marker converter: {e}")
+            self.converter = None
     
     def _get_processed_document_path(self, original_path: Path, doc_type: str) -> Path:
         """Get the path for a processed document."""
@@ -37,9 +73,10 @@ class DocumentProcessor:
     def _load_processed_document(self, processed_path: Path) -> Dict[str, Any]:
         """Load a processed document from JSON."""
         try:
-            import json
             with open(processed_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                self.logger.info(f"Loaded processed document: {list(data.keys()) if data else 'None'}")
+                return data
         except Exception as e:
             self.logger.warning(f"Failed to load processed document {processed_path}: {e}")
             return None
@@ -49,68 +86,238 @@ class DocumentProcessor:
         processed_path = self._get_processed_document_path(original_path, doc_type)
         return processed_path.exists()
     
-    def process_main_proposal(self, proposal_path: Path) -> Dict[str, Any]:
-        """
-        Process the main proposal file (DOCX or PDF).
-        Extracts text with heading structure for DOCX.
-        """
-        if not proposal_path.exists():
-            raise FileNotFoundError(f"Main proposal not found: {proposal_path}")
+    def _process_document_unified(self, file_path: Path, doc_type: str) -> Dict[str, Any]:
+        """Unified document processing method for all document types."""
+        try:
+            self.logger.info(f"Processing {file_path.name} with unified method")
+            
+            ext = file_path.suffix.lower()
+            
+            # Handle different file types
+            if ext == '.pdf':
+                return self._process_pdf_document(file_path, doc_type)
+            elif ext == '.csv':
+                return self._process_csv_document(file_path, doc_type)
+            elif ext == '.md':
+                return self._process_md_document(file_path, doc_type)
+            else:
+                raise ValueError(f"Unsupported file type: {ext}")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to process {file_path}: {e}")
+            raise RuntimeError(f"Document processing failed for {file_path.name}: {str(e)}")
+    
+    def _process_pdf_document(self, file_path: Path, doc_type: str) -> Dict[str, Any]:
+        """Process PDF documents using Marker with LLM enhancement."""
+        if not self.converter:
+            raise RuntimeError("Marker converter not initialized")
         
-        # Check if already processed
-        if self._is_document_processed(proposal_path, "proposal"):
-            self.logger.info(f"Using cached processed document: {proposal_path}")
-            processed_path = self._get_processed_document_path(proposal_path, "proposal")
-            processed_data = self._load_processed_document(processed_path)
-            if processed_data:
-                return processed_data["content"]
+        # Process PDF with OCR and LLM
+        rendered = self.converter(str(file_path))
+        md_text, _, images = text_from_rendered(rendered)
         
-        self.logger.info(f"Processing main proposal: {proposal_path}")
+        # Validate that we got actual content
+        if not md_text or md_text.strip() == "":
+            raise RuntimeError(f"PDF processing failed for {file_path.name}: extracted text is empty")
         
-        if proposal_path.suffix.lower() == '.docx':
-            result = self._process_docx_proposal(proposal_path)
-        elif proposal_path.suffix.lower() == '.pdf':
-            result = self._process_pdf_proposal(proposal_path)
-        else:
-            raise ValueError(f"Unsupported proposal format: {proposal_path.suffix}")
+        return {
+            "full_text": md_text,
+            "file_path": str(file_path),
+            "file_name": file_path.name,
+            "format": ".pdf",
+            "type": doc_type,
+            "processed_with": "marker_pdf_ocr",
+            "sections": self._extract_sections_from_markdown(md_text),
+            "metadata": {"format": "pdf", "processed_with": "marker_pdf_ocr"},
+            "images_count": len(images) if images else 0
+        }
+    
+    def _process_csv_document(self, file_path: Path, doc_type: str) -> Dict[str, Any]:
+        """Process CSV documents to readable text format."""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            rows = list(reader)
         
-        # Save processed document
-        self._save_processed_document(proposal_path, result, "proposal")
+        # Convert CSV to readable text format
+        text_lines = []
+        for i, row in enumerate(rows):
+            if i == 0:  # Header row
+                text_lines.append(" | ".join(row))
+                text_lines.append("-" * len(" | ".join(row)))
+            else:
+                text_lines.append(" | ".join(row))
         
-        return result
+        csv_text = "\n".join(text_lines)
+        
+        # Validate that we got actual content
+        if not csv_text or csv_text.strip() == "":
+            raise RuntimeError(f"CSV processing failed for {file_path.name}: extracted text is empty")
+        
+        return {
+            "full_text": csv_text,
+            "file_path": str(file_path),
+            "file_name": file_path.name,
+            "format": ".csv",
+            "type": doc_type,
+            "processed_with": "csv_processor",
+            "sections": [{"title": "CSV Data", "content": csv_text, "level": 1}],
+            "metadata": {"format": "csv", "processed_with": "csv_processor"},
+            "images_count": 0
+        }
+    
+    def _process_md_document(self, file_path: Path, doc_type: str) -> Dict[str, Any]:
+        """Process Markdown documents."""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        # Validate that we got actual content
+        if not content or content.strip() == "":
+            raise RuntimeError(f"Markdown processing failed for {file_path.name}: file is empty")
+        
+        return {
+            "full_text": content,
+            "file_path": str(file_path),
+            "file_name": file_path.name,
+            "format": ".md",
+            "type": doc_type,
+            "processed_with": "md_processor",
+            "sections": [{"title": "Markdown Document", "content": content, "level": 1}],
+            "metadata": {"format": "md", "processed_with": "md_processor"},
+            "images_count": 0
+        }
+
+    
+    def _extract_sections_from_markdown(self, markdown_content: str) -> List[Dict[str, Any]]:
+        """Extract sections from markdown content."""
+        sections = []
+        lines = markdown_content.split('\n')
+        current_section = None
+        current_content = []
+        
+        for line in lines:
+            if line.startswith('#'):
+                # Save previous section if exists
+                if current_section:
+                    current_section['content'] = '\n'.join(current_content).strip()
+                    sections.append(current_section)
+                
+                # Start new section
+                level = len(line) - len(line.lstrip('#'))
+                title = line.lstrip('#').strip()
+                current_section = {
+                    'title': title,
+                    'level': level,
+                    'content': ''
+                }
+                current_content = []
+            else:
+                current_content.append(line)
+        
+        # Add final section
+        if current_section:
+            current_section['content'] = '\n'.join(current_content).strip()
+            sections.append(current_section)
+        
+        return sections
     
     def _save_processed_document(self, original_path: Path, processed_data: Dict[str, Any], doc_type: str):
-        """Save processed document to processed/ subfolder."""
+        """Save processed document to JSON file."""
         try:
-            # Create processed directory in the main folder (not subfolders)
-            if doc_type == "proposal":
-                processed_dir = original_path.parent / "processed"
-            else:  # solicitation
-                processed_dir = original_path.parent / "processed"
-            
+            processed_dir = original_path.parent / "processed"
             processed_dir.mkdir(exist_ok=True)
             
-            # Create filename for processed document
             base_name = original_path.stem
-            processed_path = processed_dir / f"{base_name}_processed.json"
+            if doc_type == "supporting":
+                processed_path = processed_dir / f"supporting_{base_name}_processed.json"
+            elif doc_type == "solicitation":
+                processed_path = processed_dir / f"solicitation_{base_name}_processed.json"
+            else:
+                processed_path = processed_dir / f"{base_name}_processed.json"
             
-            # Save as JSON with metadata
-            processed_doc = {
+            # Create wrapper structure for saved file
+            saved_doc = {
                 "original_file": str(original_path),
                 "processed_at": str(Path.cwd()),
-                "format": processed_data.get("format", "unknown"),
-                "content": processed_data,
-                "file_size_bytes": original_path.stat().st_size if original_path.exists() else 0
+                "format": original_path.suffix,
+                "content": processed_data,  # Store the standardized structure under 'content'
+                "file_size_bytes": original_path.stat().st_size if original_path.exists() else 0,
+                "type": f"{doc_type}_document",
+                "processed_with": processed_data.get("processed_with"),
+                "images_count": processed_data.get("images_count", 0)
             }
             
-            import json
             with open(processed_path, "w", encoding="utf-8") as f:
-                json.dump(processed_doc, f, indent=2, ensure_ascii=False)
+                json.dump(saved_doc, f, indent=2, ensure_ascii=False)
             
             self.logger.info(f"Saved processed document to: {processed_path}")
             
         except Exception as e:
             self.logger.warning(f"Failed to save processed document: {e}")
+    
+    def process_main_proposal(self, proposal_path: Path) -> Dict[str, Any]:
+        """Process main proposal document using unified method."""
+        self.logger.info(f"Processing main proposal: {proposal_path}")
+        
+        # Check if already processed
+        if self._is_document_processed(proposal_path, "proposal"):
+            self.logger.info(f"Using cached processed document: {proposal_path.name}")
+            processed_path = self._get_processed_document_path(proposal_path, "proposal")
+            processed_data = self._load_processed_document(processed_path)
+            if processed_data:
+                # Extract the standardized structure from the cached wrapper
+                return processed_data["content"]
+        
+        # Process with unified method
+        doc_data = self._process_document_unified(proposal_path, "proposal")
+        
+        # Save processed document
+        self._save_processed_document(proposal_path, doc_data, "proposal")
+        
+        return doc_data
+    
+    def process_supporting_docs(self, supporting_dir: Path) -> List[Dict[str, Any]]:
+        """Process supporting documents using Marker."""
+        if not supporting_dir.exists():
+            self.logger.warning(f"Supporting docs directory not found: {supporting_dir}")
+            return []
+
+        # Find all supported files (including sub-folders)
+        supported_extensions = ['.pdf', '.txt', '.md', '.csv']
+        all_files = []
+        for ext in supported_extensions:
+            all_files.extend(list(supporting_dir.rglob(f"*{ext}")))
+
+        if not all_files:
+            self.logger.warning(f"No supporting documents found in {supporting_dir}")
+            return []
+
+        self.logger.info(f"Processing {len(all_files)} supporting documents")
+
+        supporting_docs = []
+        needs_processing = False
+
+        for file_path in all_files:
+            # Check if already processed
+            if self._is_document_processed(file_path, "supporting"):
+                self.logger.info(f"Using cached processed document: {file_path.name}")
+                processed_path = self._get_processed_document_path(file_path, "supporting")
+                processed_data = self._load_processed_document(processed_path)
+                if processed_data:
+                    # Extract the standardized structure from the cached wrapper
+                    doc_data = processed_data["content"]
+                    supporting_docs.append(doc_data)
+                    continue
+            
+            needs_processing = True
+            self.logger.info(f"Processing supporting document: {file_path.name}")
+            doc_data = self._process_document_unified(file_path, "supporting")
+            supporting_docs.append(doc_data)
+
+        # Save processed supporting documents only if we processed new ones
+        if needs_processing:
+            self._save_processed_supporting_docs(supporting_docs, supporting_dir)
+
+        return supporting_docs
     
     def _save_processed_supporting_docs(self, supporting_docs: List[Dict[str, Any]], supporting_dir: Path):
         """Save processed supporting documents as individual files."""
@@ -127,13 +334,14 @@ class DocumentProcessor:
                 processed_doc = {
                     "original_file": doc["file_path"],
                     "processed_at": str(Path.cwd()),
-                    "format": doc.get("format", "unknown"),
+                    "format": doc.get("format"),
                     "content": doc,
                     "file_size_bytes": original_path.stat().st_size if original_path.exists() else 0,
-                    "type": "supporting_document"
+                    "type": "supporting_document",
+                    "processed_with": doc.get("processed_with"),
+                    "images_count": doc.get("images_count", 0)
                 }
                 
-                import json
                 with open(processed_path, "w", encoding="utf-8") as f:
                     json.dump(processed_doc, f, indent=2, ensure_ascii=False)
                 
@@ -142,187 +350,8 @@ class DocumentProcessor:
         except Exception as e:
             self.logger.warning(f"Failed to save processed supporting documents: {e}")
     
-    def _save_processed_solicitation_docs(self, solicitation_data: Dict[str, Any], solicitation_dir: Path):
-        """Save processed solicitation documents as individual files."""
-        try:
-            processed_dir = solicitation_dir / "processed"
-            processed_dir.mkdir(exist_ok=True)
-            
-            for doc in solicitation_data.get("solicitation_documents", []):
-                # Create individual processed file for each solicitation document
-                original_path = Path(doc["file_path"])
-                base_name = original_path.stem
-                processed_path = processed_dir / f"solicitation_{base_name}_processed.json"
-                
-                processed_doc = {
-                    "original_file": doc["file_path"],
-                    "processed_at": str(Path.cwd()),
-                    "format": doc.get("type", "unknown"),
-                    "content": doc,
-                    "file_size_bytes": original_path.stat().st_size if original_path.exists() else 0,
-                    "type": "solicitation_document"
-                }
-                
-                import json
-                with open(processed_path, "w", encoding="utf-8") as f:
-                    json.dump(processed_doc, f, indent=2, ensure_ascii=False)
-                
-                self.logger.info(f"Saved processed solicitation document to: {processed_path}")
-            
-        except Exception as e:
-            self.logger.warning(f"Failed to save processed solicitation documents: {e}")
-    
-    def _process_docx_proposal(self, docx_path: Path) -> Dict[str, Any]:
-        """Process DOCX proposal with heading structure."""
-        doc = docx.Document(docx_path)
-        
-        # Extract text with heading structure
-        sections = []
-        current_section = {"title": "", "content": "", "level": 0}
-        
-        for paragraph in doc.paragraphs:
-            text = paragraph.text.strip()
-            if not text:
-                continue
-                
-            # Determine heading level
-            if paragraph.style.name.startswith('Heading'):
-                # Save previous section if it has content
-                if current_section["content"].strip():
-                    sections.append(current_section.copy())
-                
-                # Start new section
-                level = int(paragraph.style.name.replace('Heading ', ''))
-                current_section = {
-                    "title": text,
-                    "content": text,
-                    "level": level
-                }
-            else:
-                # Add to current section content
-                if current_section["content"]:
-                    current_section["content"] += "\n" + text
-                else:
-                    current_section["content"] = text
-        
-        # Add final section
-        if current_section["content"].strip():
-            sections.append(current_section)
-        
-        # Combine all text for full proposal
-        full_text = "\n\n".join([section["content"] for section in sections])
-        
-        return {
-            "full_text": full_text,
-            "sections": sections,
-            "file_path": str(docx_path),
-            "format": "docx"
-        }
-    
-    def _process_pdf_proposal(self, pdf_path: Path) -> Dict[str, Any]:
-        """Process PDF proposal."""
-        converter = PdfConverter(artifact_dict=create_model_dict())
-        
-        # Convert PDF to markdown
-        rendered = converter(str(pdf_path))
-        text, _, images = text_from_rendered(rendered)
-        
-        return {
-            "full_text": text,
-            "sections": [{"title": "PDF Document", "content": text, "level": 1}],
-            "file_path": str(pdf_path),
-            "format": "pdf"
-        }
-    
-    def process_supporting_docs(self, supporting_dir: Path) -> List[Dict[str, Any]]:
-        """
-        Process supporting documents (PDF and DOCX).
-        Converts PDFs to markdown and extracts text from DOCX.
-        """
-        if not supporting_dir.exists():
-            self.logger.warning(f"Supporting docs directory not found: {supporting_dir}")
-            return []
-
-        # Find all PDF and DOCX files (including sub-folders)
-        pdf_files = list(supporting_dir.rglob("*.pdf"))
-        docx_files = list(supporting_dir.rglob("*.docx"))
-
-        all_files = pdf_files + docx_files
-
-        if not all_files:
-            self.logger.warning(f"No supporting documents found in {supporting_dir}")
-            return []
-
-        self.logger.info(f"Processing {len(all_files)} supporting documents ({len(pdf_files)} PDF, {len(docx_files)} DOCX)")
-
-        supporting_docs = []
-        needs_processing = False
-
-        for file_path in all_files:
-            # Check if already processed
-            if self._is_document_processed(file_path, "supporting"):
-                self.logger.info(f"Using cached processed document: {file_path.name}")
-                processed_path = self._get_processed_document_path(file_path, "supporting")
-                processed_data = self._load_processed_document(processed_path)
-                if processed_data:
-                    supporting_docs.append(processed_data["content"])
-                    continue
-            
-            needs_processing = True
-            try:
-                self.logger.info(f"Processing supporting document: {file_path.name}")
-
-                if file_path.suffix.lower() == '.pdf':
-                    doc_content = self._process_pdf_document(file_path)
-                elif file_path.suffix.lower() == '.docx':
-                    doc_content = self._process_docx_document(file_path)
-                else:
-                    self.logger.warning(f"Skipping unsupported file: {file_path}")
-                    continue
-
-                doc_data = {
-                    "file_path": str(file_path),
-                    "file_name": file_path.name,
-                    "content": doc_content,
-                    "type": "supporting_document",
-                    "format": file_path.suffix.lower()
-                }
-
-                supporting_docs.append(doc_data)
-
-            except Exception as e:
-                self.logger.error(f"Failed to process {file_path}: {e}")
-                continue
-
-        # Save processed supporting documents only if we processed new ones
-        if needs_processing:
-            self._save_processed_supporting_docs(supporting_docs, supporting_dir)
-
-        return supporting_docs
-    
-    def _process_pdf_document(self, pdf_path: Path) -> str:
-        """Process PDF document to text."""
-        converter = PdfConverter(artifact_dict=create_model_dict())
-        rendered = converter(str(pdf_path))
-        text, _, images = text_from_rendered(rendered)
-        return text
-    
-    def _process_docx_document(self, docx_path: Path) -> str:
-        """Process DOCX document to text."""
-        doc = docx.Document(docx_path)
-        paragraphs = []
-        
-        for paragraph in doc.paragraphs:
-            text = paragraph.text.strip()
-            if text:
-                paragraphs.append(text)
-        
-        return "\n\n".join(paragraphs)
-    
     def process_solicitation_docs(self, solicitation_dir: Path) -> Dict[str, Any]:
-        """
-        Process solicitation documents in various formats (CSV, MD, PDF).
-        """
+        """Process solicitation documents using Marker."""
         if not solicitation_dir.exists():
             raise FileNotFoundError(f"Solicitation directory not found: {solicitation_dir}")
 
@@ -334,124 +363,65 @@ class DocumentProcessor:
         solicitation_files = file_discovery.find_solicitation_docs(solicitation_dir)
 
         # Process each file type
-        csv_docs = []
-        md_docs = []
-        pdf_docs = []
+        all_docs = []
         needs_processing = False
 
-        # Process CSV files
-        for csv_path in solicitation_files["csv"]:
+        # Process all files with Marker
+        all_files = solicitation_files["csv"] + solicitation_files["md"] + solicitation_files["pdf"]
+        
+        for file_path in all_files:
             # Check if already processed
-            if self._is_document_processed(csv_path, "solicitation"):
-                self.logger.info(f"Using cached processed document: {csv_path.name}")
-                processed_path = self._get_processed_document_path(csv_path, "solicitation")
+            if self._is_document_processed(file_path, "solicitation"):
+                self.logger.info(f"Using cached processed document: {file_path.name}")
+                processed_path = self._get_processed_document_path(file_path, "solicitation")
                 processed_data = self._load_processed_document(processed_path)
                 if processed_data:
-                    csv_docs.append(processed_data["content"])
+                    # Extract the standardized structure from the cached wrapper
+                    doc_data = processed_data["content"]
+                    all_docs.append(doc_data)
                     continue
             
             needs_processing = True
-            try:
-                self.logger.info(f"Processing solicitation CSV: {csv_path.name}")
-                csv_content = self._process_csv_document(csv_path)
-                csv_docs.append({
-                    "file_path": str(csv_path),
-                    "file_name": csv_path.name,
-                    "content": csv_content,
-                    "type": "solicitation_csv"
-                })
-            except Exception as e:
-                self.logger.error(f"Failed to process CSV {csv_path}: {e}")
-                continue
-
-        # Process MD files
-        for md_path in solicitation_files["md"]:
-            # Check if already processed
-            if self._is_document_processed(md_path, "solicitation"):
-                self.logger.info(f"Using cached processed document: {md_path.name}")
-                processed_path = self._get_processed_document_path(md_path, "solicitation")
-                processed_data = self._load_processed_document(processed_path)
-                if processed_data:
-                    md_docs.append(processed_data["content"])
-                    continue
-            
-            needs_processing = True
-            try:
-                self.logger.info(f"Processing solicitation MD: {md_path.name}")
-                with open(md_path, "r", encoding="utf-8") as f:
-                    md_content = f.read().strip()
-
-                md_docs.append({
-                    "file_path": str(md_path),
-                    "file_name": md_path.name,
-                    "content": md_content,
-                    "type": "solicitation_md"
-                })
-            except Exception as e:
-                self.logger.error(f"Failed to process MD {md_path}: {e}")
-                continue
-
-        # Process PDF files
-        converter = PdfConverter(artifact_dict=create_model_dict())
-        for pdf_path in solicitation_files["pdf"]:
-            # Check if already processed
-            if self._is_document_processed(pdf_path, "solicitation"):
-                self.logger.info(f"Using cached processed document: {pdf_path.name}")
-                processed_path = self._get_processed_document_path(pdf_path, "solicitation")
-                processed_data = self._load_processed_document(processed_path)
-                if processed_data:
-                    pdf_docs.append(processed_data["content"])
-                    continue
-            
-            needs_processing = True
-            try:
-                self.logger.info(f"Processing solicitation PDF: {pdf_path.name}")
-
-                rendered = converter(str(pdf_path))
-                text, _, images = text_from_rendered(rendered)
-
-                pdf_docs.append({
-                    "file_path": str(pdf_path),
-                    "file_name": pdf_path.name,
-                    "content": text,
-                    "type": "solicitation_pdf"
-                })
-
-            except Exception as e:
-                self.logger.error(f"Failed to process solicitation PDF {pdf_path}: {e}")
-                continue
-
-        # Combine all solicitation documents
-        all_solicitation_docs = csv_docs + md_docs + pdf_docs
+            self.logger.info(f"Processing solicitation document: {file_path.name}")
+            doc_data = self._process_document_unified(file_path, "solicitation")
+            all_docs.append(doc_data)
 
         # Save processed solicitation documents only if we processed new ones
         if needs_processing:
-            self._save_processed_solicitation_docs({"solicitation_documents": all_solicitation_docs, "csv_documents": csv_docs, "md_documents": md_docs, "pdf_documents": pdf_docs}, solicitation_dir)
+            self._save_processed_solicitation_docs(all_docs, solicitation_dir)
 
         return {
-            "solicitation_documents": all_solicitation_docs,
-            "csv_documents": csv_docs,
-            "md_documents": md_docs,
-            "pdf_documents": pdf_docs
+            "solicitation_documents": all_docs,
+            "total_documents": len(all_docs)
         }
     
-    def _process_csv_document(self, csv_path: Path) -> str:
-        """Process CSV document to text format."""
+    def _save_processed_solicitation_docs(self, solicitation_docs: List[Dict[str, Any]], solicitation_dir: Path):
+        """Save processed solicitation documents as individual files."""
         try:
-            with open(csv_path, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                rows = list(reader)
+            processed_dir = solicitation_dir / "processed"
+            processed_dir.mkdir(exist_ok=True)
             
-            # Convert CSV to readable text format
-            text_lines = []
-            for i, row in enumerate(rows):
-                if i == 0:  # Header row
-                    text_lines.append(" | ".join(row))
-                    text_lines.append("-" * len(" | ".join(row)))
-                else:
-                    text_lines.append(" | ".join(row))
+            for doc in solicitation_docs:
+                # Create individual processed file for each solicitation document
+                original_path = Path(doc["file_path"])
+                base_name = original_path.stem
+                processed_path = processed_dir / f"solicitation_{base_name}_processed.json"
+                
+                processed_doc = {
+                    "original_file": doc["file_path"],
+                    "processed_at": str(Path.cwd()),
+                    "format": doc.get("format"),
+                    "content": doc,
+                    "file_size_bytes": original_path.stat().st_size if original_path.exists() else 0,
+                    "type": "solicitation_document",
+                    "processed_with": doc.get("processed_with"),
+                    "images_count": doc.get("images_count", 0)
+                }
+                
+                with open(processed_path, "w", encoding="utf-8") as f:
+                    json.dump(processed_doc, f, indent=2, ensure_ascii=False)
+                
+                self.logger.info(f"Saved processed solicitation document to: {processed_path}")
             
-            return "\n".join(text_lines)
         except Exception as e:
-            self.logger.error(f"Failed to process CSV {csv_path}: {e}")
-            return f"Error processing CSV file: {csv_path.name}" 
+            self.logger.warning(f"Failed to save processed solicitation documents: {e}") 

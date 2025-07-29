@@ -75,8 +75,8 @@ class BaseAgent:
         
         return config
     
-    async def review(self, proposal_text: str, supporting_docs: List[Dict[str, Any]], 
-                    criteria: Dict[str, Any], solicitation_md: str) -> AgentOutput:
+    def review(self, proposal_text: str, supporting_docs: List[Dict[str, Any]], 
+               criteria: Dict[str, Any], solicitation_md: str) -> AgentOutput:
         """Perform the review using the agent's template and LLM."""
         
         # Load LLM configuration
@@ -88,7 +88,7 @@ class BaseAgent:
         prompt = self._create_agent_prompt(proposal_text, supporting_docs, criteria, solicitation_md)
         
         # Make the LLM call
-        response = await self.client.chat.completions.acreate(
+        response = self.client.chat.completions.create(
             model=llm_config["model"],
             messages=[
                 {"role": "system", "content": self.template},
@@ -122,15 +122,43 @@ class BaseAgent:
         # Combine supporting docs text
         supporting_text = ""
         for doc in supporting_docs:
-            supporting_text += f"\n\n--- {doc['file_name']} ---\n{doc['content']}"
+            # Extract full_text from the standardized document structure
+            if 'full_text' not in doc:
+                raise ValueError(f"Document {doc.get('file_name', 'unknown')} missing 'full_text' field. Document structure: {list(doc.keys())}")
+            content_text = doc['full_text']
+            if not content_text or content_text.strip() == "":
+                raise ValueError(f"Document {doc.get('file_name', 'unknown')} has empty or missing content")
+            supporting_text += f"\n\n--- {doc['file_name']} ---\n{content_text}"
         
         # Create criteria summary
         criteria_summary = ""
         if criteria.get("evaluation_criteria"):
             criteria_summary = "## Evaluation Criteria\n\n"
-            for criterion in criteria["evaluation_criteria"]:
-                criteria_summary += f"**{criterion['criterion']}** (Weight: {criterion['weight']}%)\n"
-                criteria_summary += f"{criterion['description']}\n\n"
+            
+            # Handle both flat list and nested structure
+            evaluation_criteria = criteria["evaluation_criteria"]
+            if isinstance(evaluation_criteria, list):
+                # Flat list structure
+                for criterion in evaluation_criteria:
+                    criteria_summary += f"**{criterion['criterion']}** (Weight: {criterion['weight']}%)\n"
+                    criteria_summary += f"{criterion['description']}\n\n"
+            elif isinstance(evaluation_criteria, dict):
+                # Nested structure - flatten it comprehensively
+                for section_name, section_data in evaluation_criteria.items():
+                    criteria_summary += f"### {section_name.replace('_', ' ').title()}\n\n"
+                    if isinstance(section_data, dict):
+                        for subsection_name, subsection_data in section_data.items():
+                            if isinstance(subsection_data, dict):
+                                for criterion_name, criterion_data in subsection_data.items():
+                                    if isinstance(criterion_data, dict) and 'description' in criterion_data:
+                                        weight = criterion_data.get('weight', 'N/A')
+                                        description = criterion_data['description']
+                                        criteria_summary += f"**{criterion_name.replace('_', ' ').title()}** (Weight: {weight}%)\n"
+                                        criteria_summary += f"{description}\n\n"
+        
+        # Add scoring guidance if available
+        if criteria.get("scoring_guidance"):
+            criteria_summary += f"## Scoring Guidance\n\n{criteria['scoring_guidance']}\n\n"
         
         # Build prompt from template
         prompt = f"""# {self.agent_config.get('Name', self.agent_id)} Review

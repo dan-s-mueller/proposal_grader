@@ -10,9 +10,6 @@ from pathlib import Path
 class ReviewState(BaseModel):
     """State model for the review workflow."""
     
-    # Document processing control
-    should_process_docs: bool = Field(default=True, description="Whether to process documents")
-    
     # Document processing status
     documents_processed: bool = Field(default=False, description="Whether documents have been processed")
     processing_error: Optional[str] = Field(default=None, description="Error during document processing")

@@ -4,17 +4,17 @@ LangGraph workflow for multi-role proposal review using configurable agents.
 
 import asyncio
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Callable
 from pathlib import Path
 from langgraph.graph import StateGraph, END
 from openai import OpenAI
 import os
+import json
 
 from .state_models import ReviewState
 from ..agents.agent_factory import AgentFactory
 from ..core.document_processor import DocumentProcessor
 from ..core.file_discovery import FileDiscovery
-from ..core.solicitation_ingester import SolicitationIngester
 
 
 class ReviewWorkflow:
@@ -26,10 +26,10 @@ class ReviewWorkflow:
         self.client = openai_client
         self.logger = logging.getLogger(__name__)
         
-        # Store document paths
-        self.proposal_dir = proposal_dir
-        self.supporting_dir = supporting_dir
-        self.solicitation_dir = solicitation_dir
+        # Store document paths - convert strings to Path objects
+        self.proposal_dir = Path(proposal_dir) if proposal_dir else None
+        self.supporting_dir = Path(supporting_dir) if supporting_dir else None
+        self.solicitation_dir = Path(solicitation_dir) if solicitation_dir else None
         self.should_process_docs = should_process_docs
         
         # Default agent configuration
@@ -57,7 +57,7 @@ class ReviewWorkflow:
         workflow = StateGraph(ReviewState)
         
         # Add document processing node
-        workflow.add_node("process_documents", self._process_documents_node)
+        workflow.add_node("process_documents", self._create_document_processing_node())
         
         # Add nodes for each agent
         for agent_id in self.agent_config:
@@ -69,16 +69,17 @@ class ReviewWorkflow:
         # Add aggregator node
         workflow.add_node("aggregate_results", self._aggregate_results_node)
         
-        # Define workflow: process documents first, then all agents run concurrently
+        # Define workflow: process documents first, then agents run sequentially
         workflow.set_entry_point("process_documents")
         
-        # All agents start after document processing
+        # Connect agents sequentially instead of concurrently
+        previous_node = "process_documents"
         for agent_id in self.agent_config:
-            workflow.add_edge("process_documents", agent_id)
+            workflow.add_edge(previous_node, agent_id)
+            previous_node = agent_id
         
-        # All agents feed into join node
-        for agent_id in self.agent_config:
-            workflow.add_edge(agent_id, "join_agents")
+        # Last agent feeds into join node
+        workflow.add_edge(previous_node, "join_agents")
         
         # Join node feeds into aggregation
         workflow.add_edge("join_agents", "aggregate_results")
@@ -86,63 +87,83 @@ class ReviewWorkflow:
         
         return workflow.compile()
     
-    async def _process_documents_node(self, state: ReviewState) -> ReviewState:
-        """Process documents and populate state with parsed data."""
-        self.logger.info("Processing documents...")
+    def _create_document_processing_node(self) -> Callable:
+        """Create a node for processing documents."""
         
-        # Check if we should process documents
-        if not self.should_process_docs:
-            self.logger.info("Document processing skipped (--no-process-docs flag used)")
-            state.documents_processed = True
-            return state
-        
-        try:
-            # Validate file structure
-            file_discovery = FileDiscovery()
-            validation = file_discovery.validate_file_structure(
-                self.proposal_dir, 
-                self.supporting_dir, 
-                self.solicitation_dir
-            )
-            
-            if validation["errors"]:
-                state.processing_error = f"File validation failed: {validation['errors']}"
-                return state
+        def process_documents(state: ReviewState) -> ReviewState:
+            """Process all documents and load criteria."""
+            self.logger.info("Processing documents...")
             
             # Process main proposal
-            processor = DocumentProcessor()
-            main_proposal_path = file_discovery.find_main_proposal(self.proposal_dir)
-            
-            if not main_proposal_path:
-                state.processing_error = "Main proposal not found"
-                return state
-            
-            proposal_data = processor.process_main_proposal(main_proposal_path)
-            state.proposal_text = proposal_data["full_text"]
+            if self.proposal_dir and self.proposal_dir.exists():
+                processor = DocumentProcessor()
+                file_discovery = FileDiscovery()
+                main_proposal_path = file_discovery.find_main_proposal(self.proposal_dir)
+                
+                if main_proposal_path:
+                    proposal_data = processor.process_main_proposal(main_proposal_path)
+                    if 'full_text' not in proposal_data:
+                        raise ValueError(f"Main proposal processing failed: missing 'full_text' field. Available fields: {list(proposal_data.keys())}")
+                    state.proposal_text = proposal_data['full_text']
+                    if not state.proposal_text or state.proposal_text.strip() == "":
+                        raise ValueError("Main proposal has empty or missing content")
+                    self.logger.info(f"Processed main proposal: {len(state.proposal_text)} characters")
+                else:
+                    raise FileNotFoundError("No main proposal found")
+            else:
+                raise FileNotFoundError("No proposal directory found")
             
             # Process supporting documents
-            supporting_docs = processor.process_supporting_docs(self.supporting_dir)
-            state.supporting_docs = supporting_docs
-            
-            # Process solicitation if available
-            if self.solicitation_dir and self.solicitation_dir.exists():
-                ingester = SolicitationIngester(self.client)
-                solicitation_data = ingester.ingest_solicitation(self.solicitation_dir, Path("output"))
-                state.criteria = solicitation_data.get("criteria_data", {})
-                state.solicitation_md = solicitation_data.get("solicitation_md", "")
+            if self.supporting_dir and self.supporting_dir.exists():
+                processor = DocumentProcessor()
+                supporting_docs = processor.process_supporting_docs(self.supporting_dir)
+                state.supporting_docs = supporting_docs
+                self.logger.info(f"Processed {len(state.supporting_docs)} supporting documents")
             else:
-                # Use default criteria if no solicitation
-                state.criteria = {"evaluation_criteria": []}
-                state.solicitation_md = ""
+                raise FileNotFoundError("No supporting documents directory found")
             
+            # Process solicitation documents and load criteria
+            if self.solicitation_dir and self.solicitation_dir.exists():
+                processor = DocumentProcessor()
+                solicitation_data = processor.process_solicitation_docs(self.solicitation_dir)
+                state.solicitation_md = self._create_solicitation_markdown(solicitation_data["solicitation_documents"])
+                
+                # Load criteria from static file
+                criteria_file = self.solicitation_dir / "criteria.json"
+                if criteria_file.exists():
+                    with open(criteria_file, 'r', encoding='utf-8') as f:
+                        state.criteria = json.load(f)
+                    self.logger.info(f"Loaded criteria from {criteria_file}")
+                else:
+                    raise FileNotFoundError(f"criteria.json not found in {self.solicitation_dir}")
+            else:
+                raise FileNotFoundError("No solicitation directory found")
+            
+            # Mark documents as processed
             state.documents_processed = True
             self.logger.info("Document processing completed successfully")
             
-        except Exception as e:
-            state.processing_error = f"Document processing failed: {str(e)}"
-            self.logger.error(f"Document processing failed: {e}")
+            return state
         
-        return state
+        return process_documents
+    
+    def _create_solicitation_markdown(self, solicitation_documents: List[Dict[str, Any]]) -> str:
+        """Create a markdown summary of solicitation documents."""
+        if not solicitation_documents:
+            raise ValueError("No solicitation documents found")
+        
+        markdown = "# Solicitation Documents Summary\n\n"
+        
+        for doc in solicitation_documents:
+            if 'full_text' not in doc:
+                raise ValueError(f"Solicitation document {doc.get('file_name', 'unknown')} missing 'full_text' field. Document structure: {list(doc.keys())}")
+            content_text = doc['full_text']
+            if not content_text or content_text.strip() == "":
+                raise ValueError(f"Solicitation document {doc.get('file_name', 'unknown')} has empty or missing content")
+            markdown += f"## {doc['file_name']}\n\n"
+            markdown += f"{content_text}\n\n"
+        
+        return markdown
     
     def _create_agent_node(self, agent_id: str):
         """Create a node for a specific agent."""
@@ -163,7 +184,7 @@ class ReviewWorkflow:
             
             try:
                 agent = self.agents[agent_id]
-                output = await agent.review(
+                output = agent.review(
                     state.proposal_text,
                     state.supporting_docs,
                     state.criteria,
@@ -284,6 +305,13 @@ class ReviewWorkflow:
         
         # Run the workflow
         final_state = await self.graph.ainvoke(initial_state)
+        
+        # Debug: Check what type we got back
+        self.logger.info(f"Workflow returned type: {type(final_state)}")
+        if hasattr(final_state, '__dict__'):
+            self.logger.info(f"Final state attributes: {list(final_state.__dict__.keys())}")
+        else:
+            self.logger.info(f"Final state is not an object: {final_state}")
         
         self.logger.info("Review workflow completed")
         return final_state
