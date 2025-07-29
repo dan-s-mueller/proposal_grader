@@ -153,7 +153,7 @@ Edit `config/system_config.json` to adjust temperature settings:
 
 ## 5. Run the asynchronous multi agent review
 
-### 5.1 Default run (all agents)
+#### 5.1 Default run (all agents)
 ```bash
 poetry run review
 ```
@@ -165,37 +165,37 @@ Uses:
 - Output folder: `output/`
 - Document processing: Enabled (default)
 
-### 5.2 Custom agent configuration
+#### 5.2 Custom agent configuration
 ```bash
 poetry run review --agents tech_lead,business_strategist,panel_scorer
 ```
 
-### 5.3 Skip document processing (use cached processed documents)
+#### 5.3 Skip document processing (use cached processed documents)
 ```bash
 poetry run review --no-process-docs
 ```
 
-### 5.4 Override defaults (optional)
+#### 5.4 Override defaults (optional)
 ```bash
 poetry run review   --proposal-dir documents/proposal   --supporting-dir documents/proposal/supporting_docs   --solicitation-dir documents/solicitation   --agents tech_lead,business_strategist
 ```
 
-### 5.5 List available agents
-```bash
-poetry run list-agents
+---
+
+## 6. Structured Output for Scoring (Panel Scorer)
+
+The panel scorer agent now uses **Pydantic structured output** with OpenAI function calling. This guarantees that all criterion scores are returned as valid JSON objects, parsed and validated by Pydantic. No more JSON decode errors or fragile regex parsing!
+
+**Example output schema:**
+```python
+class CriterionScore(BaseModel):
+    score: float
+    evidence: str
+    reasoning: str
+    improvements: str
 ```
 
-### 5.6 Visualize workflow structure
-```bash
-poetry run visualize
-```
-
-What happens:
-- Documents are processed (PDFs with OCR and LLM enhancement, CSV to text, MD enhanced).
-- Each agent gets a tailored prompt from its template.
-- Agents run concurrently using LangGraph workflow.
-- Files are written as each agent finishes.
-- All activity is logged to `output/review.log`.
+Each criterion is scored and returned as a validated object, ensuring robust and reliable downstream processing.
 
 ---
 
@@ -392,6 +392,11 @@ All files are discovered recursively and processed appropriately based on their 
 - Check PDF is not password protected
 - Verify PDF is not corrupted
 - Ensure PDF contains readable text or images for OCR
+
+### 8. Troubleshooting
+
+**Problem**: "JSON decode error" or "Invalid \escape" in panel scorer output
+**Solution**: The new system uses Pydantic structured output and OpenAI function calling for the panel scorer, so this error should no longer occur. If it does, check your OpenAI API version and ensure you are using a supported model (e.g., gpt-4o).
 
 ---
 

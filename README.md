@@ -113,15 +113,6 @@ poetry run review --agents tech_lead,business_strategist,panel_scorer
 
 # Skip document processing (use cached processed documents)
 poetry run review --no-process-docs
-
-# List available agents
-poetry run list-agents
-
-# Show system configuration
-poetry run show-config
-
-# Visualize workflow structure
-poetry run visualize
 ```
 
 ## 📄 Supported File Formats
@@ -168,7 +159,7 @@ All outputs are saved to the `output/` folder:
 - `output/review.log` - Persistent logging of all CLI commands and processing
 
 ### Workflow Visualization
-- `output/workflow.png` - Workflow diagram
+- Only PNG output is supported: `output/workflow.png`
 
 ## 🔧 Configuration
 
@@ -331,3 +322,18 @@ The new system replaces the old single-role rubric-based system:
 ## 📄 License
 
 MIT License - see LICENSE file for details. 
+
+## 🧑‍💻 Structured Output for Scoring (Panel Scorer)
+
+The panel scorer agent now uses **Pydantic structured output** with OpenAI function calling. This guarantees that all criterion scores are returned as valid JSON objects, parsed and validated by Pydantic. No more JSON decode errors or fragile regex parsing!
+
+**Example output schema:**
+```python
+class CriterionScore(BaseModel):
+    score: float
+    evidence: str
+    reasoning: str
+    improvements: str
+```
+
+Each criterion is scored and returned as a validated object, ensuring robust and reliable downstream processing. 
