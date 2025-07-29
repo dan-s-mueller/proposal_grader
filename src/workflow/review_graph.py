@@ -317,35 +317,44 @@ class ReviewWorkflow:
     def _create_summary(self, agent_outputs: list, consolidated_scores: Dict[str, float], action_items: List[str]) -> str:
         """Create a consolidated summary of all reviews."""
         summary = "# Multi-Agent Review Summary\n\n"
-        
+
+        # Add a prominent reviewer scores table
+        summary += "## Reviewer Scores Overview\n\n"
+        summary += "| Agent | Criterion | Score |\n|---|---|---|\n"
+        for output in agent_outputs:
+            agent_name = output.get("agent_name", "Unknown").replace('_', ' ').title()
+            scores = output.get("scores", {})
+            if scores:
+                for criterion, score in scores.items():
+                    summary += f"| {agent_name} | {criterion} | {score} |\n"
+        summary += "\n"
+
         # Add agent-specific summaries
         for output in agent_outputs:
             agent_name = output.get("agent_name", "Unknown")
             feedback = output.get("feedback", "")
             scores = output.get("scores", {})
-            
             summary += f"## {agent_name.replace('_', ' ').title()}\n\n"
             summary += f"{feedback}\n\n"
-            
             if scores:
                 summary += "**Scores:**\n"
                 for criterion, score in scores.items():
                     summary += f"- {criterion}: {score}\n"
                 summary += "\n"
-        
+
         # Add consolidated scores
         if consolidated_scores:
             summary += "## Consolidated Scores\n\n"
             for criterion, score in consolidated_scores.items():
                 summary += f"- **{criterion}**: {score}\n"
             summary += "\n"
-        
+
         # Add action items
         if action_items:
             summary += "## Action Items\n\n"
             for i, item in enumerate(action_items, 1):
                 summary += f"{i}. {item}\n"
-        
+
         return summary
     
     async def run_review(self, output_dir: Path) -> ReviewState:

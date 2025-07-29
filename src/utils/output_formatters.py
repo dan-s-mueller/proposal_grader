@@ -69,17 +69,6 @@ class OutputFormatter:
         
         # Removed self.logger.info
     
-    def save_scorecard(self, consolidated_scores: Dict[str, float], output_dir: Path):
-        """
-        Save consolidated scores to JSON file.
-        """
-        scorecard_path = output_dir / "scorecard.json"
-        
-        with open(scorecard_path, "w", encoding="utf-8") as f:
-            json.dump(consolidated_scores, f, indent=2)
-        
-        # Removed self.logger.info
-    
     def save_summary(self, summary: str, output_dir: Path):
         """
         Save consolidated summary to markdown file.
@@ -113,9 +102,6 @@ class OutputFormatter:
         
         # Save role feedback
         self.save_role_feedback(review_state.all_role_outputs, output_dir)
-        
-        # Save scorecard
-        self.save_scorecard(review_state.consolidated_scores, output_dir)
         
         # Save summary
         self.save_summary(review_state.summary, output_dir)

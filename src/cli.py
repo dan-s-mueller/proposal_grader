@@ -75,8 +75,6 @@ async def run_review_command(args):
             agent_output = final_state.agent_outputs.get(agent_id, None)
             if agent_output:
                 output_formatter.save_agent_feedback(agent_output, output_dir)
-        if final_state.consolidated_scores:
-            output_formatter.save_scorecard(final_state.consolidated_scores, output_dir)
         if final_state.summary:
             output_formatter.save_summary(final_state.summary, output_dir)
         if final_state.action_items:
